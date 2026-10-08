@@ -1,0 +1,2429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0f1d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="체크가계부">
+  <title>체크 가계부</title>
+  <style>
+    :root {
+      --bg: #0a0f1d;
+      --surface: #141d2f;
+      --card: #1b263b;
+      --input: #0e1626;
+      --border: rgba(255, 255, 255, 0.09);
+      --text: #f1f5f9;
+      --sub: #94a3b8;
+      --muted: #64748b;
+      --green: #10b981;
+      --red: #f43f5e;
+      --sky: #38bdf8;
+      --indigo: #818cf8;
+      --amber: #f59e0b;
+      --sheet-bg: rgba(0, 0, 0, 0.55);
+      /* 통계 그래프: 강조 막대(파랑)와 덜 중요한 막대(회색), 늘었음/줄었음 표시 */
+      --viz-accent: #3987e5;
+      --viz-muted: #5c5c5c;
+      --viz-bad: #d03b3b;
+      --viz-good: #0ca30c;
+    }
+    [data-theme="light"] {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --card: #ffffff;
+      --input: #f8fafc;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --sub: #475569;
+      --muted: #94a3b8;
+      --green: #059669;
+      --red: #e11d48;
+      --sky: #0284c7;
+      --indigo: #4f46e5;
+      --amber: #b45309;
+      --sheet-bg: rgba(15, 23, 42, 0.35);
+      --viz-accent: #2a78d6;
+      --viz-muted: #a8a29e;
+      --viz-bad: #d03b3b;
+      --viz-good: #006300;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body { background: var(--bg); color: var(--text); }
+    body { display: flex; justify-content: center; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    button:active { transform: scale(0.97); }
+
+    .app {
+      width: 100%;
+      max-width: 520px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) 14px calc(96px + env(safe-area-inset-bottom));
+    }
+
+    /* 요약 카드 */
+    .summary {
+      margin-top: 12px;
+      background: linear-gradient(145deg, rgba(99, 102, 241, 0.16), rgba(16, 185, 129, 0.10)), var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px 18px 16px;
+    }
+    .month-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: -4px -6px 14px;
+    }
+    .month-arrow {
+      background: none;
+      border: none;
+      width: 44px;
+      height: 44px;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--sub);
+    }
+    .month-label {
+      position: relative;
+      font-size: 21px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      text-align: center;
+    }
+    .month-label small {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--sky);
+      letter-spacing: 0;
+    }
+    /* 투명한 month 입력을 라벨 위에 덮어서, 라벨을 누르면 기기 기본 년월 선택기가 뜨게 한다 */
+    .month-label input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .copy-btn {
+      margin-top: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--indigo);
+    }
+
+    .income-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--sub);
+    }
+    .income-box {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--input);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 6px 12px;
+    }
+    .income-box:focus-within { border-color: var(--green); }
+    .income-box input {
+      width: 140px;
+      background: transparent;
+      border: none;
+      outline: none;
+      text-align: right;
+      color: var(--green);
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .income-box span { font-size: 15px; font-weight: 700; color: var(--sub); }
+
+    .remain-label { margin-top: 18px; font-size: 14px; font-weight: 700; color: var(--sub); }
+    .remain {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      color: var(--green);
+      line-height: 1.15;
+    }
+    .remain.neg { color: var(--red); }
+
+    .mini-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .mini {
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .mini-lbl { font-size: 13px; font-weight: 600; color: var(--sub); }
+    .mini-val { font-size: 18px; font-weight: 800; letter-spacing: -0.4px; margin-top: 2px; }
+    .mini-val.spent { color: var(--text); }
+    .mini-val.final { color: var(--sky); }
+    .mini-val.neg { color: var(--red); }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      margin: 14px 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sub);
+    }
+    .track { height: 8px; background: var(--input); border-radius: 99px; overflow: hidden; }
+    .fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #10b981, #38bdf8);
+      border-radius: 99px;
+      transition: width 0.25s;
+    }
+
+    /* 탭 */
+    .tabs {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin: 14px -14px 0;
+      padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+      background: var(--bg);
+    }
+    .tab {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 4px;
+      text-align: center;
+      color: var(--sub);
+    }
+    .tab b { display: block; font-size: 15px; font-weight: 800; }
+    .tab small { display: block; font-size: 12px; font-weight: 600; margin-top: 1px; }
+    .tab.active { color: var(--text); border-color: var(--sky); background: rgba(56, 189, 248, 0.14); }
+    .tab.active[data-tab="fixed"] { border-color: var(--indigo); background: rgba(129, 140, 248, 0.16); }
+    .tab.active[data-tab="card"] { border-color: var(--amber); background: rgba(245, 158, 11, 0.14); }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 0 10px;
+    }
+    .filters { display: flex; gap: 4px; }
+    .chip {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--sub);
+    }
+    .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+    .more-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 38px;
+      height: 34px;
+      font-size: 18px;
+      color: var(--sub);
+    }
+
+    /* 항목 */
+    .list { display: flex; flex-direction: column; gap: 8px; }
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 13px 8px 13px 14px;
+      cursor: pointer;
+    }
+    .item.checked { opacity: 0.6; border-color: rgba(16, 185, 129, 0.35); }
+    .chk {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      border: 2px solid var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .chk svg { display: none; width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+    .item.checked .chk { background: var(--green); border-color: var(--green); }
+    .item.checked .chk svg { display: block; }
+    .info { flex: 1; min-width: 0; }
+    .name {
+      font-size: 16px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item.checked .name { text-decoration: line-through; color: var(--muted); }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 3px; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; align-self: center; }
+    .dot.fixed { background: var(--indigo); }
+    .dot.variable { background: var(--sky); }
+    .amount { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+    .item.checked .amount { color: var(--green); }
+    .del {
+      background: none;
+      border: none;
+      width: 34px;
+      height: 34px;
+      font-size: 22px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .empty { text-align: center; padding: 40px 10px; font-size: 15px; color: var(--muted); }
+
+    /* 추가 버튼 */
+    .fab {
+      position: fixed;
+      left: 50%;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      width: calc(100% - 28px);
+      max-width: 492px;
+      height: 56px;
+      border: none;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-size: 17px;
+      font-weight: 800;
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+      z-index: 10;
+    }
+    .fab:active { transform: translateX(-50%) scale(0.98); }
+
+    /* 바텀시트 공통 */
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: var(--sheet-bg);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 20;
+    }
+    .backdrop.open { opacity: 1; pointer-events: auto; }
+    .sheet {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      width: 100%;
+      max-width: 520px;
+      transform: translate(-50%, 105%);
+      transition: transform 0.25s ease-out;
+      background: var(--surface);
+      border-radius: 22px 22px 0 0;
+      padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
+      z-index: 21;
+      max-height: 92dvh;
+      overflow-y: auto;
+    }
+    .sheet.open { transform: translate(-50%, 0); }
+    .grip { width: 40px; height: 5px; border-radius: 99px; background: var(--border); margin: 0 auto 14px; }
+    .sheet-title { font-size: 18px; font-weight: 800; margin-bottom: 14px; }
+
+    .type-seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: var(--input);
+      border-radius: 14px;
+      padding: 4px;
+      margin-bottom: 12px;
+    }
+    .type-seg button {
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--sub);
+    }
+    .type-seg button.active.variable { background: rgba(56, 189, 248, 0.2); color: var(--sky); }
+    .type-seg button.active.fixed { background: rgba(129, 140, 248, 0.22); color: var(--indigo); }
+
+    .field {
+      width: 100%;
+      background: var(--input);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 17px;
+      color: var(--text);
+      outline: none;
+      margin-bottom: 8px;
+    }
+    .field:focus { border-color: var(--sky); }
+    .field.amt { font-weight: 800; text-align: right; }
+    .field.date { font-size: 16px; color: var(--sub); min-height: 52px; }
+    .recent-wrap { margin-bottom: 10px; }
+    .recent-wrap.hidden { display: none; }
+    .recent-lbl { font-size: 13px; font-weight: 700; color: var(--sub); margin: 0 2px 6px; }
+    .recent-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      margin: 0 -16px;
+      padding: 0 16px 2px;
+    }
+    .recent-row::-webkit-scrollbar { display: none; }
+    .recent-chip {
+      flex-shrink: 0;
+      max-width: 180px;
+      text-align: left;
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+    .recent-chip b {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .recent-chip small { font-size: 12px; font-weight: 600; color: var(--muted); }
+    .repeat-hint { font-size: 14px; font-weight: 700; color: var(--indigo); margin: -2px 2px 10px; }
+    .repeat-hint:empty { display: none; }
+
+    .repeat {
+      background: rgba(129, 140, 248, 0.16);
+      color: var(--indigo);
+      border: none;
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .s-chip {
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--sub);
+    }
+    .s-chip.active { border-color: var(--sky); color: var(--sky); background: rgba(56, 189, 248, 0.15); }
+    .s-chip.danger { color: var(--red); }
+
+    .submit {
+      width: 100%;
+      height: 54px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .menu-btn {
+      width: 100%;
+      text-align: left;
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 15px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .menu-btn.danger { color: var(--red); }
+
+    /* 요약 접기 */
+    .summary.collapsed .sum-body,
+    .summary.collapsed .sum-toggle { display: none; }
+    .summary:not(.collapsed) .sum-mini { display: none; }
+    .sum-mini {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--sub);
+    }
+    .sum-mini span { white-space: nowrap; }
+    .sum-mini span:first-child { flex: 1; text-align: left; }
+    .sum-mini b { font-size: 17px; color: var(--green); margin-left: 4px; }
+    .sum-mini span:nth-child(2) b { font-size: 15px; color: var(--sky); }
+    .sum-mini b.neg { color: var(--red); }
+    .sum-mini-arrow { font-size: 18px; color: var(--muted); }
+    .sum-toggle {
+      display: block;
+      margin: 10px auto -8px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 12px;
+    }
+
+    /* 수입·이월 (요약 안의 버튼) */
+    button.income-row { width: 100%; background: none; border: none; padding: 0; text-align: left; }
+    .income-val {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      background: var(--input);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 6px 12px;
+    }
+    .income-val b { font-size: 18px; font-weight: 800; color: var(--green); }
+    .income-val small { font-size: 12px; font-weight: 700; color: var(--muted); }
+    .carry-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      background: none;
+      border: none;
+      padding: 0 2px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--sub);
+    }
+    .carry-row[hidden] { display: none; }
+    .carry-row b { color: var(--green); }
+    .carry-row b.neg { color: var(--red); }
+    .income-amt { color: var(--green); }
+    .item.checked .income-amt { color: var(--green); }
+    .inc-form { margin-top: 12px; }
+    .sheet-sub { font-size: 15px; font-weight: 800; margin: 18px 2px 4px; }
+    .carry-help { font-size: 13px; font-weight: 600; color: var(--sub); margin: 0 2px 8px; white-space: pre-line; }
+
+    /* 도구 버튼·검색 */
+    .tool-btns { display: flex; gap: 6px; }
+    .more-btn.active { border-color: var(--sky); background: rgba(56, 189, 248, 0.16); }
+    .search-row { display: flex; gap: 6px; margin: -2px 0 10px; }
+    .search-row[hidden] { display: none; }
+    .search-row .field { margin: 0; padding: 10px 12px; font-size: 16px; }
+    .search-row .more-btn { height: auto; width: 44px; }
+
+    /* 환불 */
+    .s-chip.refund-chip.active { border-color: var(--green); color: var(--green); background: rgba(16, 185, 129, 0.15); }
+    .refund-badge {
+      background: rgba(16, 185, 129, 0.14);
+      color: var(--green);
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .amount.refund { color: var(--green); }
+
+    /* 날짜별 묶음 */
+    .day-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--sub);
+      margin: 8px 4px 0;
+    }
+    .day-head span:last-child { color: var(--text); }
+    .item.flash { animation: flash 1.6s ease-out; }
+    @keyframes flash { 0%, 40% { box-shadow: 0 0 0 3px var(--sky); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+    /* 달력 */
+    .cal {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px 6px;
+    }
+    .cal-week { text-align: center; font-size: 12px; font-weight: 800; color: var(--muted); padding: 2px 0 4px; }
+    .cal-week.sun, .cal-day.sun .cal-num { color: var(--red); }
+    .cal-week.sat, .cal-day.sat .cal-num { color: var(--sky); }
+    .cal-day {
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 2px;
+      background: none;
+      border: 1.5px solid transparent;
+      border-radius: 10px;
+      padding: 4px 0;
+    }
+    .cal-day.today { border-color: var(--border); background: var(--input); }
+    .cal-day.sel { border-color: var(--sky); background: rgba(56, 189, 248, 0.14); }
+    .cal-num { font-size: 14px; font-weight: 800; color: var(--text); }
+    .cal-mark { font-size: 12px; margin-left: 1px; }
+    .cal-mark.due { color: var(--amber); }
+    .cal-mark.done { color: var(--green); }
+    .cal-amt { font-size: 11px; font-weight: 700; color: var(--sub); letter-spacing: -0.3px; }
+
+    /* 통계 */
+    .stat-tile {
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+    .stat-tile .lbl { font-size: 13px; font-weight: 700; color: var(--sub); }
+    .stat-tile .big { font-size: 28px; font-weight: 900; letter-spacing: -0.8px; margin: 2px 0; }
+    .stat-tile .sub { font-size: 13px; font-weight: 600; color: var(--sub); }
+    .delta { font-weight: 800; }
+    .delta.up { color: var(--viz-bad); }
+    .delta.down { color: var(--viz-good); }
+    .stat-h { font-size: 15px; font-weight: 800; margin: 18px 2px 8px; }
+    .stat-h small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      align-items: center;
+      gap: 4px 8px;
+      padding: 6px 2px;
+    }
+    .bar-lbl { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { height: 12px; }
+    .bar {
+      height: 12px;
+      min-width: 2px;
+      background: var(--viz-accent);
+      border-radius: 0 4px 4px 0;  /* 바닥(왼쪽)은 각지게, 끝은 둥글게 */
+    }
+    .bar.muted { background: var(--viz-muted); }
+    .bar-val { font-size: 13px; font-weight: 800; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+    .bar-val small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+    .bar-sub { grid-column: 2 / 4; font-size: 12px; font-weight: 600; color: var(--muted); margin-top: -2px; }
+    .split-line { display: flex; gap: 12px; font-size: 13px; font-weight: 700; color: var(--sub); margin: 8px 2px 0; }
+    .split-line b { color: var(--text); }
+
+    /* 아래 안내(되돌리기 버튼이 붙을 수 있음) */
+    .toast { max-width: calc(100vw - 32px); }
+    .toast.actionable { pointer-events: auto; display: flex; align-items: center; gap: 14px; }
+    .toast span { overflow: hidden; text-overflow: ellipsis; }
+    .toast-btn { background: none; border: none; color: #38bdf8; font-size: 15px; font-weight: 800; padding: 2px 0; flex-shrink: 0; }
+
+    /* 신용카드 */
+    .card-box { margin-top: 12px; cursor: pointer; }
+    .card-box-title { font-size: 14px; font-weight: 800; color: var(--amber); margin: 0 2px 6px; }
+    .mini-sub { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 2px; }
+    .mini-sub.left { color: var(--amber); }
+    .card-badge {
+      background: rgba(245, 158, 11, 0.16);
+      color: var(--amber);
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .card-badge.paid { background: rgba(16, 185, 129, 0.14); color: var(--green); }
+    .list-section { font-size: 14px; font-weight: 800; color: var(--sub); margin: 6px 2px 0; }
+    .pay-seg button.active.cash { background: rgba(16, 185, 129, 0.18); color: var(--green); }
+    .pay-seg button.active.credit { background: rgba(245, 158, 11, 0.2); color: var(--amber); }
+    .delete-btn {
+      width: 100%;
+      height: 48px;
+      margin-top: 8px;
+      border: 1px solid rgba(244, 63, 94, 0.4);
+      border-radius: 14px;
+      background: transparent;
+      color: var(--red);
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .delete-btn[hidden] { display: none; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(88px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.92);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 12px 18px;
+      border-radius: 99px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 30;
+    }
+    .toast.show { opacity: 1; }
+
+    .storage-warn {
+      margin-top: 12px;
+      background: rgba(244, 63, 94, 0.14);
+      border: 1px solid rgba(244, 63, 94, 0.4);
+      color: var(--red);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+    .storage-warn[hidden] { display: none; }
+    .storage-info {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+  <div class="storage-warn" id="storageWarn" hidden>
+    ⚠️ 지금 연 방식으로는 브라우저에 저장이 되지 않습니다. 닫으면 입력한 내용이 사라지니 ⋯ → 백업 내보내기를 해 두세요.
+  </div>
+  <!-- 요약 -->
+  <section class="summary" id="summary">
+    <div class="month-nav">
+      <button class="month-arrow" onclick="shiftMonth(-1)" aria-label="이전 달">‹</button>
+      <label class="month-label">
+        <span id="monthText">2026년 10월</span>
+        <small id="monthSub"></small>
+        <input type="month" id="monthPicker">
+      </label>
+      <button class="month-arrow" onclick="shiftMonth(1)" aria-label="다음 달">›</button>
+    </div>
+
+    <!-- 요약을 접었을 때 보이는 한 줄 (누르면 펼침) -->
+    <button class="sum-mini" onclick="toggleSummary()">
+      <span>남은 돈 <b id="miniRemain">₩0</b></span>
+      <span>다 내면 <b id="miniFinal">₩0</b></span>
+      <span class="sum-mini-arrow">⌄</span>
+    </button>
+
+    <div class="sum-body">
+    <button class="income-row" onclick="openIncomeSheet()">
+      <span>수입</span>
+      <span class="income-val"><b id="incomeTotal">₩0</b><small id="incomeSub">눌러서 입력</small></span>
+    </button>
+    <button class="carry-row" id="carryRow" onclick="openIncomeSheet()" hidden>
+      <span id="carryLbl">지난달에서 넘어온 돈</span>
+      <b id="carryVal">₩0</b>
+    </button>
+
+    <div class="remain-label">현재 남은 돈</div>
+    <div class="remain" id="remain">₩0</div>
+
+    <div class="mini-stats">
+      <div class="mini">
+        <div class="mini-lbl">낸 돈 (체크)</div>
+        <div class="mini-val spent" id="spent">₩0</div>
+      </div>
+      <div class="mini">
+        <div class="mini-lbl">다 내면 남는 돈</div>
+        <div class="mini-val final" id="final">₩0</div>
+      </div>
+    </div>
+
+    <!-- 신용카드: 카드 항목이 있을 때만 보인다. 누르면 카드 탭으로 -->
+    <div class="card-box" id="cardBox" hidden onclick="setTab('card')">
+      <div class="card-box-title">💳 신용카드</div>
+      <div class="mini-stats" style="margin-top: 0;">
+        <div class="mini">
+          <div class="mini-lbl" id="cardUsedLbl">이번 달 사용</div>
+          <div class="mini-val" id="cardUsed">₩0</div>
+          <div class="mini-sub" id="cardUsedSub"></div>
+        </div>
+        <div class="mini">
+          <div class="mini-lbl" id="cardDueLbl">이번 달에 낼 카드값</div>
+          <div class="mini-val" id="cardDue">₩0</div>
+          <div class="mini-sub" id="cardDueSub"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-info">
+      <span id="progressText">예정 ₩0 중 0%</span>
+      <span id="countText">0 / 0건</span>
+    </div>
+    <div class="track"><div class="fill" id="fill"></div></div>
+    </div>
+    <button class="sum-toggle" onclick="toggleSummary()">⌃ 요약 접기</button>
+  </section>
+
+  <!-- 고정 / 변동 / 전체 탭 -->
+  <nav class="tabs">
+    <button class="tab" data-tab="all" onclick="setTab('all')"><b>전체</b><small id="tabAll">₩0</small></button>
+    <button class="tab" data-tab="fixed" onclick="setTab('fixed')"><b>고정</b><small id="tabFixed">₩0</small></button>
+    <button class="tab" data-tab="variable" onclick="setTab('variable')"><b>변동</b><small id="tabVar">₩0</small></button>
+    <button class="tab" data-tab="card" onclick="setTab('card')"><b>💳 카드</b><small id="tabCard">₩0</small></button>
+  </nav>
+
+  <div class="toolbar">
+    <div class="filters">
+      <button class="chip" data-filter="all" onclick="setFilter('all')">전체</button>
+      <button class="chip" data-filter="unchecked" onclick="setFilter('unchecked')">남은 것</button>
+      <button class="chip" data-filter="checked" onclick="setFilter('checked')">완료</button>
+    </div>
+    <div class="tool-btns">
+      <button class="more-btn" id="searchBtn" onclick="toggleSearch()" aria-label="검색">🔍</button>
+      <button class="more-btn" id="viewBtn" onclick="toggleView()" aria-label="달력으로 보기">📅</button>
+      <button class="more-btn" onclick="openStats()" aria-label="통계">📊</button>
+      <button class="more-btn" onclick="openSheet('menuSheet')" aria-label="더보기">⋯</button>
+    </div>
+  </div>
+  <div class="search-row" id="searchRow" hidden>
+    <input type="text" id="searchInput" class="field" placeholder="항목 이름·분류로 찾기 (모든 달)" autocomplete="off" enterkeyhint="search">
+    <button class="more-btn" onclick="closeSearch()" aria-label="검색 닫기">✕</button>
+  </div>
+
+  <main class="list" id="list"></main>
+</div>
+
+<button class="fab" onclick="openAddSheet()">＋ 항목 추가</button>
+<div class="toast" id="toast"></div>
+
+<div class="backdrop" id="backdrop" onclick="closeSheets()"></div>
+
+<!-- 추가 시트 -->
+<section class="sheet" id="addSheet">
+  <div class="grip"></div>
+  <div class="sheet-title" id="sheetTitle">새 항목</div>
+  <div class="type-seg">
+    <button class="variable" id="typeVar" onclick="setInputType('variable')">🛒 변동 지출</button>
+    <button class="fixed" id="typeFixed" onclick="setInputType('fixed')">📌 고정 지출</button>
+  </div>
+  <div class="type-seg pay-seg">
+    <button class="cash" id="payCash" onclick="setPayCard(false)">💵 현금·체크카드</button>
+    <button class="credit" id="payCard" onclick="setPayCard(true)">💳 신용카드</button>
+  </div>
+  <div class="recent-wrap" id="recentWrap">
+    <div class="recent-lbl">최근 항목</div>
+    <div class="recent-row" id="recentChips"></div>
+  </div>
+  <input type="text" id="nameInput" class="field" placeholder="항목명" autocomplete="off" enterkeyhint="next">
+  <input type="tel" inputmode="numeric" id="amtInput" class="field amt" placeholder="금액 (원)" enterkeyhint="done">
+  <input type="date" id="dateInput" class="field date">
+  <div class="repeat-hint" id="repeatHint"></div>
+  <div class="chips-row">
+    <button class="s-chip" onclick="addAmount(1000)">+1천</button>
+    <button class="s-chip" onclick="addAmount(5000)">+5천</button>
+    <button class="s-chip" onclick="addAmount(10000)">+1만</button>
+    <button class="s-chip" onclick="addAmount(50000)">+5만</button>
+    <button class="s-chip" onclick="addAmount(100000)">+10만</button>
+    <button class="s-chip danger" onclick="clearAmount()">지우기</button>
+    <button class="s-chip refund-chip" id="refundBtn" onclick="setRefund(!inputRefund)">↩️ 환불</button>
+  </div>
+  <div class="chips-row" id="catChips"></div>
+  <button class="submit" id="submitBtn" onclick="addItem()">추가하기</button>
+  <button class="delete-btn" id="deleteBtn" onclick="deleteEditing()" hidden>🗑️ 이 항목 삭제</button>
+</section>
+
+<!-- 더보기 메뉴 시트 -->
+<section class="sheet" id="menuSheet">
+  <div class="grip"></div>
+  <div class="sheet-title">더보기</div>
+  <div class="storage-info" id="storageInfo" style="margin: -6px 2px 12px;"></div>
+  <button class="menu-btn" onclick="toggleTabChecks()">✅ 현재 탭 전체 체크 / 해제</button>
+  <button class="menu-btn" onclick="resetAllChecks()">🔄 모든 체크 초기화</button>
+  <button class="menu-btn" onclick="menuCopyFromPrevious()">📋 이전 달 수입·고정 지출 가져오기</button>
+  <button class="menu-btn" onclick="exportBackup()">💾 백업 내보내기 (모든 달)</button>
+  <button class="menu-btn" onclick="$('importFile').click()">📂 백업 불러오기</button>
+  <input type="file" id="importFile" accept=".json,application/json" hidden>
+  <button class="menu-btn danger" onclick="deleteCheckedInTab()">🗑️ 현재 탭의 완료 항목 삭제</button>
+</section>
+
+<!-- 수입·이월 시트 -->
+<section class="sheet" id="incomeSheet">
+  <div class="grip"></div>
+  <div class="sheet-title" id="incomeTitle">수입</div>
+  <div class="list" id="incomeList"></div>
+  <div class="inc-form">
+    <input type="text" id="incName" class="field" placeholder="수입 이름 (예: 육아급여)" autocomplete="off" enterkeyhint="next">
+    <input type="tel" inputmode="numeric" id="incAmt" class="field amt" placeholder="금액 (원)" enterkeyhint="done">
+    <button class="submit" id="incSubmit" onclick="saveIncome()">＋ 수입 추가</button>
+    <button class="delete-btn" id="incDelete" onclick="deleteIncome()" hidden>🗑️ 이 수입 삭제</button>
+  </div>
+  <div class="sheet-sub">지난달에서 넘어온 돈 (이월)</div>
+  <div class="carry-help" id="carryHelp"></div>
+  <input type="tel" inputmode="numeric" id="carryInput" class="field amt" placeholder="직접 입력하려면 금액을 쓰세요">
+  <button class="s-chip" id="carryAutoBtn" onclick="clearCarry()" hidden>자동 계산으로 되돌리기</button>
+</section>
+
+<!-- 통계 시트 -->
+<section class="sheet" id="statsSheet">
+  <div class="grip"></div>
+  <div class="sheet-title" id="statsTitle">통계</div>
+  <div id="statsBody"></div>
+</section>
+
+<script>
+  // 년월별 데이터: { 'YYYY-MM': { income, items } }
+  const MONTHS_KEY = 'split_mobile_budget_months_v3';
+  // 기존 파일(mobile_budget.html)의 키. 처음 한 번만 읽어서 이번 달로 옮기고, 원본은 지우지 않는다
+  const OLD_STORAGE_KEY = 'split_mobile_budget_data_v2';
+  const OLD_INCOME_KEY = 'split_mobile_budget_income_v2';
+  const THEME_KEY = 'standalone_mobile_budget_theme_v1';
+  const TAB_KEY = 'split_mobile_budget_tab_v2';
+  const EXCEL_KEY = 'split_mobile_budget_excel_v1';
+  const PAY_KEY = 'split_mobile_budget_paymethod_v1';  // 새 항목의 결제수단 기본값(마지막에 고른 것)
+  const VIEW_KEY = 'split_mobile_budget_view_v1';      // 목록 / 달력
+  const SUMMARY_KEY = 'split_mobile_budget_sumfold_v1'; // 요약을 접어 두었는지
+
+  // 분류는 가계부.xlsx 의 대분류/카테고리에 맞춤
+  const categoriesFixed = ['보험료', '통신/반려견', '주거/금융/구독', '생활비', '기타'];
+  const categoriesVariable = ['식비/장보기', '육아/생필품', '카페/간식', '의료/건강', '쇼핑/생활', '반려견', '교통/차량', '기타'];
+
+  let months = {};
+  let currentMonth = todayMonth();
+  let curMonth = { incomes: [], items: [] };  // 보고 있는 달의 데이터 (저장된 달이면 months[currentMonth] 와 같은 객체)
+  let items = [];
+  let incomes = [];            // 보고 있는 달의 수입 [{ id, name, amount, received }]
+  let viewMode = 'list';       // 'list' | 'calendar'
+  let selectedDay = new Date().getDate();  // 달력에서 고른 날
+  let searchQuery = '';
+  let inputRefund = false;     // 입력창에서 '환불'을 골랐는지
+  let editingIncomeId = null;  // 수정 중인 수입 id
+  let currentTab = 'all';      // 'all' | 'fixed' | 'variable'
+  let currentFilter = 'all';   // 'all' | 'unchecked' | 'checked'
+  let inputType = 'variable';
+  let inputCard = false;       // 입력창에서 고른 결제수단이 신용카드인지
+  let editingId = null;        // 수정 중인 항목 id (null 이면 새 항목)
+  let formFromEdit = false;    // 입력창에 수정하던 항목 내용이 남아 있는지
+  let selectedCategory = categoriesVariable[0];
+
+  const $ = id => document.getElementById(id);
+
+  function safeGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function safeSet(key, val) {
+    try { localStorage.setItem(key, val); } catch (e) { console.error(e); }
+  }
+
+  function init() {
+    // 테마: 기존 파일에서 라이트로 저장했으면 따르고, 없으면 기기 설정을 따른다
+    const savedTheme = safeGet(THEME_KEY);
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    if (savedTheme === 'light' || (!savedTheme && prefersLight)) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+
+    checkStorage();
+    loadMonths();
+
+    const savedTab = safeGet(TAB_KEY);
+    if (['all', 'fixed', 'variable', 'card'].includes(savedTab)) currentTab = savedTab;
+    if (safeGet(VIEW_KEY) === 'calendar') viewMode = 'calendar';
+    applySummaryCollapsed(safeGet(SUMMARY_KEY) === '1');
+
+    setupInputs();
+    setInputType('variable');
+    selectMonth(todayMonth());
+
+    // 안드로이드가 탭을 새로 불러오면 기록은 남고 창은 닫힌 채로 열린다. 창 기록이 남아 있으면 되돌린다
+    if (history.state && history.state.budgetGuard) history.replaceState({ budget: 'guard' }, '');  // 이전 버전 기록
+    if (isState('sheet')) {
+      poppingSheet = true;
+      history.back();
+    }
+  }
+
+  // 파일을 여는 방식(주소)에 따라 브라우저 저장이 막히는 경우가 있어서, 실제로 써 보고 읽어서 확인한다.
+  // 더보기 메뉴에는 지금 주소와 저장된 데이터 개수를 보여줘서, 다시 열었을 때 같은 곳인지 확인할 수 있게 한다
+  function checkStorage() {
+    let ok = false;
+    try {
+      const probe = String(Date.now());
+      localStorage.setItem('__budget_probe', probe);
+      ok = localStorage.getItem('__budget_probe') === probe;
+      localStorage.removeItem('__budget_probe');
+    } catch (e) { ok = false; }
+    $('storageWarn').hidden = ok;
+
+    let firstOpened = safeGet('split_mobile_budget_first_opened');
+    if (ok && !firstOpened) {
+      firstOpened = new Date().toLocaleString('ko-KR');
+      safeSet('split_mobile_budget_first_opened', firstOpened);
+    }
+    $('storageInfo').innerText = ok
+      ? `저장: 이 브라우저에 저장 중 (이 주소로 처음 연 시각 ${firstOpened})\n주소: ${decodeURI(location.href)}`
+      : `저장: 안 됨\n주소: ${decodeURI(location.href)}`;
+  }
+
+  // 예시용 가짜 데이터의 id. 실제 기록이 아니므로 불러올 때 버린다
+  // (기존 mobile_budget.html 의 f1~v5, 이전 v2 의 '숫자-s숫자')
+  function isSampleId(id) {
+    return /^[fv]\d$/.test(id) || /-s\d+$/.test(id);
+  }
+
+  function loadMonths() {
+    const saved = safeGet(MONTHS_KEY);
+    months = {};
+    if (saved) {
+      try { months = JSON.parse(saved) || {}; } catch (e) { months = {}; }
+    } else {
+      // 처음 실행: 기존 파일에서 직접 입력한 항목이 있으면 이번 달로 가져온다
+      try {
+        const oldItems = JSON.parse(safeGet(OLD_STORAGE_KEY) || '[]').filter(it => !isSampleId(it.id));
+        if (oldItems.length) {
+          oldItems.forEach(it => { if (!it.type) it.type = 'variable'; });
+          months[todayMonth()] = { income: parseInt(safeGet(OLD_INCOME_KEY), 10) || 0, items: oldItems };
+        }
+      } catch (e) { /* 기존 데이터가 깨져 있으면 빈 상태로 시작 */ }
+    }
+
+    // 예전 형식을 바꾸고 예시 데이터를 정리한다
+    Object.keys(months).forEach(ym => {
+      const mo = normalizeMonth(ym, months[ym]);
+      mo.items = mo.items.filter(it => !isSampleId(it.id));
+      if (isEmptyMonth(mo)) delete months[ym];
+    });
+
+    // 가계부.xlsx 의 7·8월 기록을 한 번만 넣는다. 그 달에 이미 입력한 게 있으면 건드리지 않는다
+    if (!safeGet(EXCEL_KEY)) {
+      Object.entries(excelMonths()).forEach(([ym, data]) => {
+        if (!months[ym]) months[ym] = normalizeMonth(ym, data);
+      });
+      safeSet(EXCEL_KEY, '1');
+    }
+    safeSet(MONTHS_KEY, JSON.stringify(months));
+  }
+
+  // 가계부.xlsx 내용 (고정비_상세, 변동지출_내역, Sheet1 의 7월 열)
+  function excelMonths() {
+    const fixedAug = [
+      ['삼성보험', 121753, '보험료'],
+      ['db보험', 8750, '보험료'],
+      ['현대해상', 141200, '보험료'],
+      ['kb손보', 15531, '보험료'],
+      ['삼성화재', 11812, '보험료'],
+      ['수연보험', 178696, '보험료'],
+      ['헬로비전', 24000, '통신/반려견'],
+      ['핸드폰', 5780, '통신/반려견'],
+      ['강아지약', 360000, '통신/반려견'],
+      ['대출', 340000, '주거/금융/구독'],
+      ['관리비', 200000, '주거/금융/구독'],
+      ['회생', 717298, '주거/금융/구독'],
+      ['lg구독', 17900, '주거/금융/구독'],
+      ['쿠팡', 7890, '주거/금융/구독'],
+      ['생활비', 1000000, '생활비']
+    ];
+    const varAug = [
+      ['2026-08-01', '종량제봉투 20L', 8700, '육아/생필품'],
+      ['2026-08-05', '(독일내수) 압타밀 프로누트라 3단계 (3캔)', 74400, '육아/생필품'],
+      ['2026-08-06', '삼성미래산부인과의원', 1000, '의료/건강'],
+      ['2026-08-08', '메가MGC커피 인천', 2000, '카페/간식'],
+      ['2026-08-09', '안심배송 중기1 이유식 체험용 (2세트)', 4000, '식비/장보기'],
+      ['2026-08-09', '크크크 코인 노래연습장', 1000, '쇼핑/생활']
+    ];
+    // 7월은 엑셀에 고정 3건(합계 2,047,220원)만 있고 수입은 적혀 있지 않다
+    const fixedJul = [
+      ['현대', 319800, '보험료'],
+      ['삼성', 829113, '보험료'],
+      ['회생보험', 898307, '보험료']
+    ];
+    const varJul = [
+      ['2026-07-28', '우성 독무대 센스 강아지사료 5kg', 13100, '반려견'],
+      ['2026-07-30', '(독일내수) 압타밀 프로누트라 2단계 (3캔)', 74400, '육아/생필품']
+    ];
+
+    let n = 0;
+    const id = () => `xl${n++}`;
+    // 지난 달 기록이므로 모두 체크(지출 완료) 상태로 넣는다
+    const fixed = (ym, rows) => rows.map(([name, amount, category]) =>
+      ({ id: id(), type: 'fixed', name, amount, category, checked: true, date: `${ym}-01` }));
+    const variable = rows => rows.map(([date, name, amount, category]) =>
+      ({ id: id(), type: 'variable', name, amount, category, checked: true, date }));
+
+    return {
+      '2026-07': { incomes: [], items: [...fixed('2026-07', fixedJul), ...variable(varJul)] },
+      '2026-08': {
+        incomes: [
+          { id: 'xl-inc0', name: '육아급여', amount: 2500000, received: true },
+          { id: 'xl-inc1', name: '육아수당', amount: 1100000, received: true }
+        ],
+        items: [...fixed('2026-08', fixedAug), ...variable(varAug)]
+      }
+    };
+  }
+
+  // 달 데이터: { incomes: [{ id, name, amount, received }], items: [...], carry?: 직접 입력한 이월 금액 }
+  // 예전 형식 { income: 숫자 } 는 '수입' 한 건(들어옴)으로 바꾼다
+  function normalizeMonth(ym, mo) {
+    if (!Array.isArray(mo.items)) mo.items = [];
+    if (!Array.isArray(mo.incomes)) {
+      mo.incomes = Number(mo.income) > 0
+        ? [{ id: `inc-${ym}`, name: '수입', amount: Math.round(Number(mo.income)), received: true }]
+        : [];
+    }
+    delete mo.income;
+    return mo;
+  }
+
+  function isEmptyMonth(mo) {
+    return !mo.items.length && !mo.incomes.length && typeof mo.carry !== 'number';
+  }
+
+  // 보고 있는 달 데이터를 저장. 수입·항목·이월이 모두 없는 달은 남기지 않는다
+  function saveItems() {
+    curMonth.items = items;
+    curMonth.incomes = incomes;
+    if (isEmptyMonth(curMonth)) delete months[currentMonth];
+    else months[currentMonth] = curMonth;
+    safeSet(MONTHS_KEY, JSON.stringify(months));
+  }
+
+  // 년월
+  function todayMonth() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function selectMonth(ym) {
+    if (!/^\d{4}-\d{2}$/.test(ym)) return;
+    if (ym !== currentMonth) selectedDay = ym === todayMonth() ? new Date().getDate() : null;
+    currentMonth = ym;
+    curMonth = months[ym] || { incomes: [], items: [] };
+    items = curMonth.items;
+    incomes = curMonth.incomes;
+
+    const [y, m] = ym.split('-');
+    $('monthText').innerText = `${y}년 ${parseInt(m, 10)}월`;
+    $('monthSub').innerText = ym === todayMonth() ? '이번 달' : '';
+    $('monthPicker').value = ym;
+    render();
+  }
+
+  function shiftMonth(delta) {
+    const [y, m] = currentMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    selectMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+
+  // 현재 달보다 앞선 달 중 데이터가 있는 가장 가까운 달
+  function previousMonthWithData() {
+    const keys = Object.keys(months).filter(k => k < currentMonth).sort();
+    return keys.length ? keys[keys.length - 1] : null;
+  }
+
+  // 이전 달의 수입과 고정 지출을 체크 해제 상태로 복사.
+  // 이미 같은 이름의 고정 지출이 있으면 건너뛰고, 수입은 비어 있을 때만 채운다
+  function copyFromPrevious() {
+    const prev = previousMonthWithData();
+    if (!prev) return 0;
+    rememberForUndo();
+    const src = months[prev];
+    const has = new Set(items.filter(it => it.type === 'fixed').map(repeatKey));
+    const [y, m] = currentMonth.split('-');
+    const base = Date.now();
+    const copied = src.items
+      .filter(it => it.type === 'fixed' && !has.has(repeatKey(it)))
+      .map((it, i) => ({
+        ...it,
+        id: `${base}-${i}`,
+        checked: false,
+        paidIn: undefined,  // 카드값을 낸 기록은 가져오지 않는다
+        // 같은 날짜(일)로 옮기되, 그 달에 없는 날(31일 등)은 말일로
+        date: `${y}-${m}-${String(Math.min(parseInt((it.date || '').slice(8), 10) || 1, daysInMonth(currentMonth))).padStart(2, '0')}`
+      }));
+    items = copied.concat(items);
+    // 수입은 비어 있을 때만 가져오고, 새 달이니 '들어옴' 체크는 푼다
+    let copiedIncomes = 0;
+    if (!incomes.length) {
+      incomes = (src.incomes || []).map((x, i) => ({ ...x, id: `${base}-i${i}`, received: false }));
+      copiedIncomes = incomes.length;
+    }
+    saveItems();
+    render();
+    if (copied.length || copiedIncomes) {
+      offerUndo(`${monthName(prev)}에서 고정 지출 ${copied.length}개${copiedIncomes ? `·수입 ${copiedIncomes}건` : ''} 가져옴`);
+    } else {
+      showToast('새로 가져올 고정 지출이 없습니다');
+    }
+    return copied.length;
+  }
+
+  function menuCopyFromPrevious() {
+    closeSheets();
+    if (!previousMonthWithData()) { showToast('가져올 이전 달 데이터가 없습니다'); return; }
+    copyFromPrevious();
+  }
+
+  // ── 백업 ──
+  // 모든 달의 데이터를 .json 파일 하나로 내려받는다
+  function exportBackup() {
+    const backup = { app: 'check-budget', version: 1, exportedAt: new Date().toISOString(), months };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const t = new Date();
+    const stamp = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `가계부_백업_${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    closeSheets();  // 다운로드를 시작한 뒤에 메뉴 기록을 되돌린다
+  }
+
+  // 백업 파일을 읽어서 지금 데이터를 통째로 바꾼다
+  function importBackup(file) {
+    closeSheets();
+    const reader = new FileReader();
+    reader.onload = () => {
+      let data;
+      try {
+        data = parseBackup(JSON.parse(reader.result));
+      } catch (e) {
+        alert('백업 파일을 읽을 수 없습니다.\n가계부에서 내보낸 .json 파일인지 확인해 주세요.');
+        return;
+      }
+      const keys = Object.keys(data).sort();
+      const count = keys.reduce((s, k) => s + data[k].items.length, 0);
+      const range = keys.length ? `${keys[0]} ~ ${keys[keys.length - 1]}` : '없음';
+      if (!confirm(`백업을 불러올까요?\n\n기간: ${range} (${keys.length}개월)\n항목: ${count}개\n\n⚠️ 지금 이 기기에 있는 가계부 내용은 모두 백업 내용으로 바뀝니다.`)) return;
+      months = data;
+      safeSet(MONTHS_KEY, JSON.stringify(months));
+      selectMonth(currentMonth);
+      alert('불러오기를 마쳤습니다.');
+    };
+    reader.onerror = () => alert('파일을 열 수 없습니다.');
+    reader.readAsText(file);
+  }
+
+  // 형식이 맞는 달·항목만 남긴다. 형식이 아예 다르면 예외를 던진다
+  function parseBackup(raw) {
+    const src = raw && raw.app === 'check-budget' ? raw.months : null;
+    if (!src || typeof src !== 'object') throw new Error('not a backup');
+    const out = {};
+    Object.entries(src).forEach(([ym, mo]) => {
+      if (!/^\d{4}-\d{2}$/.test(ym) || !mo || !Array.isArray(mo.items)) return;
+      const list = mo.items
+        .filter(it => it && typeof it.name === 'string' && Number(it.amount) > 0)
+        .map((it, i) => ({
+          id: String(it.id || `${Date.now()}-${ym}-${i}`),
+          type: it.type === 'fixed' ? 'fixed' : 'variable',
+          name: it.name,
+          amount: Math.round(Number(it.amount)),
+          category: typeof it.category === 'string' ? it.category : '기타',
+          checked: !!it.checked,
+          date: /^\d{4}-\d{2}-\d{2}$/.test(it.date || '') ? it.date : `${ym}-01`,
+          ...(it.card ? { card: true } : {}),
+          ...(it.card && /^\d{4}-\d{2}$/.test(it.paidIn || '') ? { paidIn: it.paidIn } : {}),
+          ...(it.refund ? { refund: true } : {})
+        }));
+      // 수입: 새 형식(incomes 목록) 또는 예전 형식(income 숫자)
+      const incs = Array.isArray(mo.incomes)
+        ? mo.incomes
+          .filter(x => x && typeof x.name === 'string' && Number(x.amount) > 0)
+          .map((x, i) => ({ id: String(x.id || `${Date.now()}-${ym}-i${i}`), name: x.name, amount: Math.round(Number(x.amount)), received: !!x.received }))
+        : (Number(mo.income) > 0 ? [{ id: `inc-${ym}`, name: '수입', amount: Math.round(Number(mo.income)), received: true }] : []);
+      const carry = typeof mo.carry === 'number' && isFinite(mo.carry) ? Math.round(mo.carry) : null;
+      if (list.length || incs.length || carry !== null) {
+        out[ym] = { incomes: incs, items: list, ...(carry !== null ? { carry } : {}) };
+      }
+    });
+    return out;
+  }
+
+  function daysInMonth(ym) {
+    const [y, m] = ym.split('-').map(Number);
+    return new Date(y, m, 0).getDate();
+  }
+
+  // ── 반복 주기 ──
+  // 이름이 같은 변동 지출을 같은 항목으로 보고(금액은 달라도 됨), 날짜 간격의 평균을 주기로 쓴다.
+  // 대소문자와 띄어쓰기 차이는 무시한다
+  function nameKey(name) { return String(name || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+  function repeatKey(it) { return nameKey(it.name); }
+
+  function dayNum(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) / 86400000;
+  }
+
+  function buildRepeatMap() {
+    const groups = {};
+    Object.values(months).forEach(mo => (mo.items || []).forEach(it => {
+      if (it.type !== 'variable' || it.refund || !/^\d{4}-\d{2}-\d{2}$/.test(it.date || '')) return;
+      (groups[repeatKey(it)] = groups[repeatKey(it)] || []).push({ day: dayNum(it.date), amount: it.amount });
+    }));
+
+    const map = {};
+    Object.entries(groups).forEach(([key, list]) => {
+      list.sort((a, b) => a.day - b.day);
+      const days = [...new Set(list.map(x => x.day))];  // 같은 날 두 번은 한 번으로
+      if (days.length < 2) return;
+      const gaps = days.slice(1).map((d, i) => d - days[i]);
+      const avg = Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length);
+      const amounts = list.map(x => x.amount);
+      map[key] = {
+        avg,
+        count: days.length,
+        last: days[days.length - 1],
+        lastAmount: amounts[amounts.length - 1],
+        minAmount: Math.min(...amounts),
+        maxAmount: Math.max(...amounts)
+      };
+    });
+    return map;
+  }
+
+  function cycleText(avg) {
+    if (avg >= 26 && avg <= 34) return '매달';
+    if (avg === 7) return '매주';
+    return `${avg}일마다`;
+  }
+
+  function dayToLabel(n) {
+    const d = new Date(n * 86400000);
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  }
+
+  function showRepeat(id, e) {
+    e.stopPropagation();
+    const found = findItem(id);
+    const it = found && found.it;
+    const r = it && buildRepeatMap()[repeatKey(it)];
+    if (!r) return;
+    const amountLine = r.minAmount === r.maxAmount
+      ? `금액 ${won(r.minAmount)}`
+      : `금액 ${won(r.minAmount)} ~ ${won(r.maxAmount)} (최근 ${won(r.lastAmount)})`;
+    const msg = `'${it.name}'\n\n` +
+      `${r.count}번 입력됨 · 평균 ${r.avg}일 간격\n` +
+      `${amountLine}\n` +
+      `마지막 ${dayToLabel(r.last)} → 다음 예상 ${dayToLabel(r.last + r.avg)}쯤`;
+
+    // 한 달 간격으로 반복되면 고정 지출로 옮길지 묻는다
+    if (r.avg >= 26 && r.avg <= 34) {
+      if (confirm(msg + '\n\n매달 나가는 지출이에요. 이 항목을 고정 지출로 옮길까요?')) {
+        it.type = 'fixed';
+        if (!categoriesFixed.includes(it.category)) it.category = '기타';
+        saveItems();
+        render();
+      }
+    } else {
+      alert(msg);
+    }
+  }
+
+  // 입력하는 중에 같은 항목이 전에 있었으면 간격을 바로 보여준다
+  function updateRepeatHint() {
+    const hint = $('repeatHint');
+    if (editingId) {  // 수정 중인 항목 자신과 비교하게 되므로 보여주지 않는다
+      hint.innerText = '';
+      return;
+    }
+    const name = $('nameInput').value.trim();
+    const date = $('dateInput').value;
+    hint.innerText = '';
+    if (inputType !== 'variable' || inputRefund || !name || !date) return;
+
+    const key = nameKey(name);
+    let lastBefore = null;
+    Object.values(months).forEach(mo => (mo.items || []).forEach(it => {
+      if (it.type === 'variable' && !it.refund && repeatKey(it) === key && it.date && it.date <= date) {
+        if (!lastBefore || it.date > lastBefore.date) lastBefore = it;
+      }
+    }));
+    if (!lastBefore) return;
+    const gap = dayNum(date) - dayNum(lastBefore.date);
+    hint.innerText = gap === 0
+      ? `🔁 같은 날 이미 입력한 항목이에요 (${won(lastBefore.amount)})`
+      : `🔁 지난번 ${dayToLabel(dayNum(lastBefore.date))} ${won(lastBefore.amount)} 이후 ${gap}일 만이에요`;
+  }
+
+  function won(n) { return '₩' + (Number(n) || 0).toLocaleString('ko-KR'); }
+  function signedWon(n) { return (n < 0 ? '-' : '') + won(Math.abs(n)); }
+  function plusWon(n) { return (n > 0 ? '+' : '') + signedWon(n); }
+  // 환불 항목은 돈이 돌아오는 것이라 계산할 때 마이너스로 센다
+  function val(it) { return it.refund ? -it.amount : it.amount; }
+  function sumVal(list) { return list.reduce((s, it) => s + val(it), 0); }
+  // 달력 칸에 들어갈 짧은 금액: 52,000 → 5.2만, 8,700 → 8.7천
+  function shortWon(n) {
+    const a = Math.abs(n), sign = n < 0 ? '-' : '';
+    if (a >= 10000) return sign + (a >= 1000000 ? Math.round(a / 10000) : +(a / 10000).toFixed(1)) + '만';
+    if (a >= 1000) return sign + +(a / 1000).toFixed(1) + '천';
+    return sign + a;
+  }
+  function onlyDigits(s) { return s.replace(/[^0-9]/g, ''); }
+
+  function setupInputs() {
+    // 금액 칸은 입력하는 대로 1,000 단위 쉼표를 붙인다
+    ['amtInput', 'incAmt', 'carryInput'].forEach(id => $(id).addEventListener('input', e => {
+      const raw = onlyDigits(e.target.value);
+      e.target.value = raw ? parseInt(raw, 10).toLocaleString('ko-KR') : '';
+    }));
+    $('carryInput').addEventListener('change', saveCarryInput);
+    $('incAmt').addEventListener('keydown', e => { if (e.key === 'Enter') saveIncome(); });
+    $('searchInput').addEventListener('input', e => {
+      searchQuery = e.target.value;
+      render();
+    });
+
+    $('monthPicker').addEventListener('change', e => selectMonth(e.target.value));
+
+    $('importFile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      e.target.value = '';  // 같은 파일을 다시 골라도 change 가 일어나게
+      if (file) importBackup(file);
+    });
+
+    $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('amtInput').focus(); });
+    $('amtInput').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+    ['nameInput', 'amtInput', 'dateInput'].forEach(id => {
+      $(id).addEventListener('input', updateRepeatHint);
+      $(id).addEventListener('change', updateRepeatHint);
+    });
+  }
+
+  // 시트
+  // 입력창·메뉴를 열 때 기록을 하나 쌓아서, 뒤로 가기를 누르면 창만 닫히게 한다
+  function openSheet(id) {
+    armBackGuard();
+    if (!isState('sheet')) history.pushState({ budget: 'sheet' }, '');
+    $('backdrop').classList.add('open');
+    $(id).classList.add('open');
+  }
+  function hideSheets() {
+    editingId = null;
+    $('backdrop').classList.remove('open');
+    document.querySelectorAll('.sheet').forEach(s => s.classList.remove('open'));
+    document.activeElement && document.activeElement.blur();
+  }
+  // 화면에서 직접 닫을 때(바깥 누르기, 추가, 메뉴 실행)는 열면서 쌓은 기록도 되돌린다
+  function closeSheets() {
+    hideSheets();
+    if (isState('sheet')) {
+      poppingSheet = true;
+      history.back();
+    }
+  }
+  function openAddSheet() {
+    editingId = null;
+    $('sheetTitle').innerText = '새 항목';
+    $('deleteBtn').hidden = true;
+    if (formFromEdit) {  // 수정하던 항목 내용은 비운다
+      $('nameInput').value = '';
+      $('amtInput').value = '';
+      formFromEdit = false;
+      if (currentTab !== 'fixed' && currentTab !== 'variable') setInputType(inputType);  // 버튼 글자를 '추가'로 되돌린다
+    }
+    // 고정/변동 탭이면 그 종류로, 카드 탭이면 신용카드로 바로 추가. 아니면 마지막에 고른 결제수단
+    if (currentTab === 'fixed' || currentTab === 'variable') setInputType(currentTab);
+    setPayCard(currentTab === 'card' || safeGet(PAY_KEY) === 'card', false);
+    setRefund(false);
+    // 날짜는 보고 있는 달 안에서만 고르게 하고, 이번 달이면 오늘을 기본값으로
+    const dateEl = $('dateInput');
+    const today = new Date();
+    const todayIso = `${todayMonth()}-${String(today.getDate()).padStart(2, '0')}`;
+    dateEl.min = `${currentMonth}-01`;
+    dateEl.max = `${currentMonth}-${String(daysInMonth(currentMonth)).padStart(2, '0')}`;
+    // 달력에서 날짜를 골라 둔 상태면 그 날짜로
+    dateEl.value = viewMode === 'calendar' && selectedDay
+      ? `${currentMonth}-${String(Math.min(selectedDay, daysInMonth(currentMonth))).padStart(2, '0')}`
+      : (currentMonth === todayMonth() ? todayIso : dateEl.min);
+    renderRecent();
+    updateRepeatHint();
+    openSheet('addSheet');
+    setTimeout(() => $('nameInput').focus(), 250);
+  }
+
+  function setInputType(type) {
+    inputType = type;
+    $('typeVar').classList.toggle('active', type === 'variable');
+    $('typeFixed').classList.toggle('active', type === 'fixed');
+    updateSubmitLabel();
+
+    const cats = type === 'fixed' ? categoriesFixed : categoriesVariable;
+    selectedCategory = cats[0];
+    const box = $('catChips');
+    box.innerHTML = '';
+    cats.forEach((cat, i) => {
+      const b = document.createElement('button');
+      b.className = 's-chip' + (i === 0 ? ' active' : '');
+      b.innerText = cat;
+      b.onclick = () => {
+        box.querySelectorAll('.s-chip').forEach(c => c.classList.remove('active'));
+        b.classList.add('active');
+        selectedCategory = cat;
+      };
+      box.appendChild(b);
+    });
+    renderRecent();
+    updateRepeatHint();
+  }
+
+  function selectCategory(cat) {
+    const cats = inputType === 'fixed' ? categoriesFixed : categoriesVariable;
+    selectedCategory = cats.includes(cat) ? cat : cats[cats.length - 1];
+    $('catChips').querySelectorAll('.s-chip').forEach(c => c.classList.toggle('active', c.innerText === selectedCategory));
+  }
+
+  // 지금 고른 종류(고정/변동)로 최근에 입력한 항목. 이름이 같으면 가장 최근 것 하나만
+  function recentItems(limit = 10) {
+    const all = [];
+    Object.values(months).forEach(mo => (mo.items || []).forEach(it => {
+      if (it.type === inputType && !it.refund) all.push(it);
+    }));
+    // 날짜가 늦은 순, 같은 날이면 나중에 만든 것(id가 큰 것) 먼저
+    all.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.id).localeCompare(String(a.id)));
+    const seen = new Set();
+    const out = [];
+    for (const it of all) {
+      const k = nameKey(it.name);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(it);
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  function renderRecent() {
+    if (editingId) {  // 수정할 때는 최근 항목을 보여주지 않는다
+      $('recentWrap').classList.add('hidden');
+      return;
+    }
+    const list = recentItems();
+    $('recentWrap').classList.toggle('hidden', !list.length);
+    const row = $('recentChips');
+    row.innerHTML = '';
+    list.forEach(it => {
+      const b = document.createElement('button');
+      b.className = 'recent-chip';
+      b.innerHTML = `<b>${escapeHtml(it.name)}</b><small>${it.card ? '💳 ' : ''}${won(it.amount)}</small>`;
+      b.onclick = () => {
+        $('nameInput').value = it.name;
+        $('amtInput').value = it.amount.toLocaleString('ko-KR');
+        selectCategory(it.category);
+        setPayCard(!!it.card);
+        updateRepeatHint();
+      };
+      row.appendChild(b);
+    });
+  }
+
+  function addAmount(n) {
+    const cur = parseInt(onlyDigits($('amtInput').value), 10) || 0;
+    $('amtInput').value = (cur + n).toLocaleString('ko-KR');
+  }
+  function clearAmount() { $('amtInput').value = ''; }
+
+  // 결제수단: 현금·체크카드 / 신용카드
+  function setPayCard(on, remember = true) {
+    inputCard = on;
+    $('payCash').classList.toggle('active', !on);
+    $('payCard').classList.toggle('active', on);
+    if (remember && !editingId) safeSet(PAY_KEY, on ? 'card' : 'cash');
+  }
+
+  // 환불: 돈이 돌아오는 항목. 금액은 그대로 적고 계산할 때 마이너스로 센다
+  function setRefund(on) {
+    inputRefund = on;
+    $('refundBtn').classList.toggle('active', on);
+    updateSubmitLabel();
+    updateRepeatHint();
+  }
+
+  function updateSubmitLabel() {
+    $('submitBtn').innerText = editingId ? '저장'
+      : inputRefund ? '↩️ 환불 추가'
+      : (inputType === 'fixed' ? '📌 고정 지출에 추가' : '🛒 변동 지출에 추가');
+  }
+
+  // 새 항목 추가, 또는 수정 중인 항목 저장
+  function addItem() {
+    const name = $('nameInput').value.trim();
+    const amount = parseInt(onlyDigits($('amtInput').value), 10);
+    if (!name) { $('nameInput').focus(); return; }
+    if (!amount) { $('amtInput').focus(); return; }
+    const date = $('dateInput').value;
+    const wasEditing = !!editingId;
+    rememberForUndo();
+
+    if (editingId) {
+      const found = findItem(editingId);
+      if (found) {
+        const it = found.it;
+        it.type = inputType;
+        it.name = name;
+        it.amount = amount;
+        it.category = selectedCategory;
+        if (date.startsWith(found.ym)) it.date = date;
+        if (inputCard) {
+          // 이미 체크된 항목을 카드로 바꾸면, 그 항목의 달에 카드값을 낸 것으로 본다
+          if (!it.card && it.checked) it.paidIn = found.ym;
+          it.card = true;
+        } else {
+          delete it.card;
+          delete it.paidIn;
+        }
+        if (inputRefund) it.refund = true;
+        else delete it.refund;
+        saveItems();
+      }
+    } else {
+      const it = {
+        id: Date.now().toString(),
+        type: inputType,
+        name,
+        amount,
+        category: selectedCategory,
+        checked: false,
+        date: date.startsWith(currentMonth) ? date : $('dateInput').min
+      };
+      if (inputCard) it.card = true;
+      if (inputRefund) it.refund = true;
+      items.unshift(it);
+      saveItems();
+    }
+    $('nameInput').value = '';
+    $('amtInput').value = '';
+    $('repeatHint').innerText = '';
+    closeSheets();
+    render();
+    offerUndo(`'${name}' ${wasEditing ? '수정함' : '추가함'}`);
+  }
+
+  // 이번 달 항목에서 먼저 찾고, 없으면 다른 달에서 찾는다 (카드 탭에는 지난달 카드 항목도 나온다)
+  function findItem(id) {
+    const own = items.find(x => x.id === id);
+    if (own) return { it: own, ym: currentMonth };
+    for (const [ym, mo] of Object.entries(months)) {
+      const it = (mo.items || []).find(x => x.id === id);
+      if (it) return { it, ym };
+    }
+    return null;
+  }
+
+  // 카드 항목은 체크할 때 "지금 보고 있는 달에 카드값을 냈다"고 기록한다
+  function setChecked(it, on) {
+    it.checked = on;
+    if (it.card && on) it.paidIn = currentMonth;
+    else delete it.paidIn;
+  }
+
+  function toggleCheck(id) {
+    const found = findItem(id);
+    if (!found) return;
+    rememberForUndo();
+    const it = found.it;
+    setChecked(it, !it.checked);
+    saveItems();
+    render();
+    const done = it.refund ? '환불 받음' : it.card ? '결제 완료' : '체크함';
+    offerUndo(`'${it.name}' ${it.checked ? done : '체크 해제'}`);
+  }
+
+  // 항목 수정: 추가 창을 수정용으로 연다. 삭제도 여기서 한다
+  function openEditSheet(id, e) {
+    e.stopPropagation();
+    const found = findItem(id);
+    if (!found) return;
+    const it = found.it;
+    editingId = id;
+    formFromEdit = true;
+    setInputType(it.type);
+    selectCategory(it.category);
+    setPayCard(!!it.card, false);
+    setRefund(!!it.refund);
+    $('nameInput').value = it.name;
+    $('amtInput').value = it.amount.toLocaleString('ko-KR');
+    const dateEl = $('dateInput');
+    dateEl.min = `${found.ym}-01`;
+    dateEl.max = `${found.ym}-${String(daysInMonth(found.ym)).padStart(2, '0')}`;
+    dateEl.value = /^\d{4}-\d{2}-\d{2}$/.test(it.date || '') ? it.date : dateEl.min;
+    $('sheetTitle').innerText = found.ym === currentMonth ? '항목 수정' : `항목 수정 (${parseInt(found.ym.slice(5), 10)}월 항목)`;
+    $('deleteBtn').hidden = false;
+    openSheet('addSheet');
+  }
+
+  function deleteEditing() {
+    const found = editingId && findItem(editingId);
+    if (!found || !confirm(`'${found.it.name}' 항목을 삭제할까요?`)) return;
+    rememberForUndo();
+    if (found.ym === currentMonth) {
+      items = items.filter(x => x.id !== found.it.id);
+    } else {
+      const mo = months[found.ym];
+      mo.items = mo.items.filter(x => x.id !== found.it.id);
+      if (!mo.items.length && !mo.income) delete months[found.ym];
+    }
+    saveItems();
+    closeSheets();  // 입력창 내용과 버튼 글자는 다음에 openAddSheet() 가 되돌린다(formFromEdit)
+    render();
+    offerUndo(`'${found.it.name}' 삭제함`);
+  }
+
+  // 카드 탭: 이번 달 카드 항목 + 지난달까지 쓴 카드 항목 중 이번 달 몫(안 냈거나 이번 달에 낸 것)
+  function itemsInTab() {
+    if (currentTab === 'card') {
+      return items.filter(it => it.card).concat(carriedCardItems(currentMonth).map(c => c.it));
+    }
+    return currentTab === 'all' ? items : items.filter(it => it.type === currentTab);
+  }
+
+  function toggleTabChecks() {
+    const target = itemsInTab();
+    closeSheets();
+    if (!target.length) return;
+    rememberForUndo();
+    const allChecked = target.every(it => it.checked);
+    target.forEach(it => setChecked(it, !allChecked));
+    saveItems();
+    render();
+    offerUndo(`${target.length}개 ${allChecked ? '체크 해제' : '모두 체크'}`);
+  }
+
+  function resetAllChecks() {
+    closeSheets();
+    if (!items.length || !confirm('이번 달 항목의 체크를 모두 해제할까요?')) return;
+    rememberForUndo();
+    items.forEach(it => setChecked(it, false));
+    saveItems();
+    render();
+    offerUndo('이번 달 체크를 모두 해제함');
+  }
+
+  // 지난달 카드 항목은 그 달의 기록이라 지우지 않고, 이번 달 항목만 지운다
+  function deleteCheckedInTab() {
+    const target = itemsInTab().filter(it => it.checked && items.includes(it));
+    closeSheets();
+    if (!target.length) {
+      showToast('완료된 항목이 없습니다');
+      return;
+    }
+    if (!confirm(`완료된 ${target.length}개 항목을 삭제할까요?`)) return;
+    rememberForUndo();
+    const ids = new Set(target.map(it => it.id));
+    items = items.filter(it => !ids.has(it.id));
+    saveItems();
+    render();
+    offerUndo(`${target.length}개 삭제함`);
+  }
+
+  function setTab(tab) {
+    currentTab = tab;
+    safeSet(TAB_KEY, tab);
+    render();
+  }
+  function setFilter(f) {
+    currentFilter = f;
+    render();
+  }
+
+  // ── 신용카드 계산 ──
+  // 카드 항목(card: true)의 체크는 "카드값 결제 완료"이고, 낸 달을 paidIn('YYYY-MM')에 적는다.
+  // 돈은 실제로 나간 달 기준으로 센다:
+  //   일반 항목 → 체크하면 그 항목의 달에 나간 돈
+  //   카드 항목 → 낸 달(paidIn)에 나간 돈. 아직 안 냈으면 지금 보는 달에 낼 돈으로 본다
+
+  // M 이전 달에 쓴 카드 항목 중 아직 안 냈거나 M 에 낸 것 = M 에 낼(낸) 지난 카드값
+  function carriedCardItems(M) {
+    const out = [];
+    Object.keys(months).sort().forEach(ym => {
+      if (ym >= M) return;
+      (months[ym].items || []).forEach(it => {
+        if (it.card && (!it.checked || it.paidIn === M)) out.push({ it, ym });
+      });
+    });
+    return out;
+  }
+
+  function monthObj(ym) { return ym === currentMonth ? curMonth : months[ym]; }
+  function monthName(ym) { return `${parseInt(ym.slice(5), 10)}월`; }
+
+  // M 달의 돈 계산. 돈이 실제로 나가고 들어온 달 기준이다
+  function monthFigures(M) {
+    const mo = monthObj(M) || { items: [], incomes: [] };
+    const own = mo.items || [];
+    const carried = carriedCardItems(M).map(c => c.it);
+    // 이 달에 나갈 돈: 이 달 항목(다른 달에 낸 카드 항목은 뺀다) + 지난 카드값 중 이 달 몫
+    const outflow = own
+      .filter(it => !(it.card && it.checked && it.paidIn && it.paidIn !== M))
+      .concat(carried);
+    const paidList = outflow.filter(it => it.checked);
+    const incs = mo.incomes || [];
+    const cardUsed = own.filter(it => it.card);
+    return {
+      own,
+      outflow,
+      planned: sumVal(outflow),
+      paid: sumVal(paidList),
+      paidCount: paidList.length,
+      incomeTotal: incs.reduce((s, x) => s + x.amount, 0),
+      received: incs.filter(x => x.received).reduce((s, x) => s + x.amount, 0),
+      cardUsed: sumVal(cardUsed),
+      cardUsedLeft: sumVal(cardUsed.filter(it => !it.checked)),
+      cardDue: sumVal(carried),
+      cardDueLeft: sumVal(carried.filter(it => !it.checked)),
+      hasCard: cardUsed.length > 0 || carried.length > 0
+    };
+  }
+
+  // ── 이월 ──
+  // 지난달 끝에 남은 돈(이월 + 들어온 수입 − 낸 돈)이 이번 달로 넘어온다.
+  // 이월을 직접 입력한 달(carry)은 그 값을 쓰고, 지난달에 수입 기록이 없으면(덜 적은 달) 0 으로 본다
+  function prevYm(ym) {
+    const [y, m] = ym.split('-').map(Number);
+    const d = new Date(y, m - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  function autoCarry(M, depth = 0) {
+    const pm = monthObj(prevYm(M));
+    if (!pm || depth > 240) return 0;
+    if (!(pm.incomes || []).length && typeof pm.carry !== 'number') return 0;
+    return endingOf(prevYm(M), depth + 1);
+  }
+  function carryIn(M, depth = 0) {
+    const mo = monthObj(M);
+    if (mo && typeof mo.carry === 'number') return mo.carry;
+    return autoCarry(M, depth);
+  }
+  function endingOf(M, depth = 0) {
+    const f = monthFigures(M);
+    return carryIn(M, depth) + f.received - f.paid;
+  }
+
+  function renderSummary() {
+    const v = monthFigures(currentMonth);
+    const carry = carryIn(currentMonth);
+    const remain = carry + v.received - v.paid;
+    const final = carry + v.incomeTotal - v.planned;
+    const pct = v.planned > 0 ? Math.round(v.paid / v.planned * 100) : 0;
+
+    // 수입·이월
+    $('incomeTotal').innerText = won(v.incomeTotal);
+    $('incomeSub').innerText = !incomes.length ? '눌러서 입력'
+      : (v.received === v.incomeTotal ? `${incomes.length}건 · 모두 들어옴 ✓` : `들어옴 ${won(v.received)}`);
+    const manualCarry = typeof curMonth.carry === 'number';
+    $('carryRow').hidden = !carry && !manualCarry;
+    $('carryLbl').innerText = manualCarry ? '이월 (직접 입력)' : `${monthName(prevYm(currentMonth))}에서 넘어온 돈`;
+    $('carryVal').innerText = plusWon(carry);
+    $('carryVal').classList.toggle('neg', carry < 0);
+
+    $('remain').innerText = signedWon(remain);
+    $('remain').classList.toggle('neg', remain < 0);
+    $('spent').innerText = signedWon(v.paid);
+    $('final').innerText = signedWon(final);
+    $('final').classList.toggle('neg', final < 0);
+    $('progressText').innerText = `예정 ${signedWon(v.planned)} 중 ${pct}%`;
+    $('countText').innerText = `${v.paidCount} / ${v.outflow.length}건`;
+    $('fill').style.width = Math.max(0, Math.min(100, pct)) + '%';
+    // 요약을 접었을 때 보이는 한 줄
+    $('miniRemain').innerText = signedWon(remain);
+    $('miniRemain').classList.toggle('neg', remain < 0);
+    $('miniFinal').innerText = signedWon(final);
+    $('miniFinal').classList.toggle('neg', final < 0);
+
+    $('tabAll').innerText = signedWon(sumVal(items));
+    $('tabFixed').innerText = signedWon(sumVal(items.filter(it => it.type === 'fixed')));
+    $('tabVar').innerText = signedWon(sumVal(items.filter(it => it.type === 'variable')));
+    $('tabCard').innerText = signedWon(v.cardUsed);
+
+    // 신용카드 요약
+    const m = monthName(currentMonth);
+    $('cardBox').hidden = !v.hasCard;
+    $('cardUsedLbl').innerText = `${m} 사용`;
+    $('cardUsed').innerText = signedWon(v.cardUsed);
+    $('cardUsedSub').innerText = v.cardUsedLeft ? `미결제 ${signedWon(v.cardUsedLeft)}` : (v.cardUsed ? '모두 결제 완료 ✓' : '사용 없음');
+    $('cardUsedSub').classList.toggle('left', v.cardUsedLeft > 0);
+    $('cardDueLbl').innerText = `${m}에 낼 지난 카드값`;
+    $('cardDue').innerText = signedWon(v.cardDue);
+    $('cardDueSub').innerText = v.cardDueLeft ? `남은 ${signedWon(v.cardDueLeft)}` : (v.cardDue ? '모두 결제 완료 ✓' : '없음');
+    $('cardDueSub').classList.toggle('left', v.cardDueLeft > 0);
+  }
+
+  const WEEKDAYS = '일월화수목금토';
+
+  function render() {
+    renderSummary();
+
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.filter === currentFilter));
+    $('viewBtn').classList.toggle('active', viewMode === 'calendar');
+    $('viewBtn').setAttribute('aria-label', viewMode === 'calendar' ? '목록으로 보기' : '달력으로 보기');
+    $('searchBtn').classList.toggle('active', !$('searchRow').hidden);
+
+    const box = $('list');
+    const carriedYm = new Map(carriedCardItems(currentMonth).map(c => [c.it.id, c.ym]));
+    const row = rowRenderer(carriedYm);
+
+    // 검색 중이면 모든 달에서 찾은 결과
+    if (searchQuery.trim()) {
+      box.innerHTML = searchResultsHtml(row);
+      return;
+    }
+
+    let list = itemsInTab();
+    if (currentFilter === 'checked') list = list.filter(it => it.checked);
+    if (currentFilter === 'unchecked') list = list.filter(it => !it.checked);
+    // 날짜가 늦은 것을 위로, 같은 날이면 남은 것을 먼저
+    list = [...list].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (a.checked - b.checked));
+
+    if (viewMode === 'calendar') {
+      box.innerHTML = calendarHtml(list.filter(it => !carriedYm.has(it.id)), row);
+      return;
+    }
+
+    if (!list.length && currentTab === 'card') {
+      box.innerHTML = `<div class="empty">신용카드 항목이 없습니다.<br>항목을 추가하거나 수정할 때<br>💳 신용카드를 고르면 여기에 모입니다.</div>`;
+      return;
+    }
+    if (!list.length) {
+      box.innerHTML = `<div class="empty">항목이 없습니다.<br>아래 버튼으로 추가하세요.${copyButtonHtml()}</div>`;
+      return;
+    }
+
+    if (currentTab === 'card') {
+      const before = list.filter(it => carriedYm.has(it.id));
+      const mine = list.filter(it => !carriedYm.has(it.id));
+      const m = monthName(currentMonth);
+      box.innerHTML =
+        (before.length ? `<div class="list-section">지난달까지 쓴 카드값 · ${m}에 낼 돈</div>` + before.map(it => row(it)).join('') : '') +
+        (mine.length ? `<div class="list-section">${m} 카드 사용</div>` + mine.map(it => row(it)).join('') : '');
+    } else {
+      box.innerHTML = groupByDateHtml(list, row);
+    }
+  }
+
+  // 빈 달이면 이전 달 가져오기 버튼
+  function copyButtonHtml() {
+    const prev = items.length === 0 ? previousMonthWithData() : null;
+    return prev ? `<br><button class="copy-btn" onclick="copyFromPrevious()">📋 ${monthName(prev)}의 수입·고정 지출 가져오기</button>` : '';
+  }
+
+  function dayLabel(iso) {
+    const d = new Date(`${iso}T00:00:00`);
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
+  }
+
+  // 날짜별로 묶고, 날짜 줄에 그날 합계를 붙인다 (list 는 날짜순으로 정렬돼 있어야 한다)
+  function groupByDateHtml(list, row) {
+    let html = '';
+    let i = 0;
+    while (i < list.length) {
+      const date = list[i].date || '';
+      const day = [];
+      while (i < list.length && (list[i].date || '') === date) day.push(list[i++]);
+      const head = /^\d{4}-\d{2}-\d{2}$/.test(date) ? dayLabel(date) : '날짜 없음';
+      html += `<div class="day-head"><span>${head}</span><span>${signedWon(sumVal(day))}</span></div>` +
+        day.map(it => row(it)).join('');
+    }
+    return html;
+  }
+
+  // 항목 한 줄을 만드는 함수. onclick 을 주면 눌렀을 때 동작이 바뀐다(검색 결과는 그 달로 이동)
+  function rowRenderer(carriedYm) {
+    const repeats = buildRepeatMap();
+    const dateLabel = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? ` · ${parseInt(d.slice(5, 7), 10)}/${parseInt(d.slice(8), 10)}` : '';
+    const repeatBadge = it => {
+      const r = it.type === 'variable' && !it.refund && repeats[repeatKey(it)];
+      return r ? `<button class="repeat" onclick="showRepeat('${it.id}', event)">🔁 ${cycleText(r.avg)}</button>` : '';
+    };
+    // 카드 항목 표시: 미결제 / 결제 완료 / ○월 결제, 지난달 항목이면 ○월 사용
+    const cardBadge = it => {
+      if (!it.card) return '';
+      const usedYm = carriedYm.get(it.id);
+      const homeYm = usedYm || currentMonth;
+      const used = usedYm ? `${monthName(usedYm)} 사용 · ` : '';
+      const state = !it.checked ? '미결제'
+        : (it.paidIn && it.paidIn !== homeYm ? `${monthName(it.paidIn)} 결제` : '결제 완료');
+      return `<span class="card-badge ${it.checked ? 'paid' : ''}">💳 ${used}${state}</span>`;
+    };
+    return (it, onclick = `toggleCheck('${it.id}')`) => `
+      <div class="item ${it.checked ? 'checked' : ''}" data-id="${it.id}" onclick="${onclick}">
+        <div class="chk"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+        <div class="info">
+          <div class="name">${escapeHtml(it.name)}</div>
+          <div class="meta">
+            <span class="dot ${it.type}"></span>
+            <span>${it.type === 'fixed' ? '고정' : '변동'} · ${escapeHtml(it.category || '')}${dateLabel(it.date)}</span>
+            ${it.refund ? `<span class="refund-badge">↩️ 환불${it.checked ? ' 받음' : ''}</span>` : ''}
+            ${cardBadge(it)}
+            ${repeatBadge(it)}
+          </div>
+        </div>
+        <div class="amount ${it.refund ? 'refund' : ''}">${it.refund ? '−' : ''}${won(it.amount)}</div>
+        <button class="del" onclick="openEditSheet('${it.id}', event)" aria-label="수정">✎</button>
+      </div>
+    `;
+  }
+
+  // ── 검색 ── 모든 달에서 이름·분류로 찾는다. 결과를 누르면 그 달로 간다
+  function searchResultsHtml(row) {
+    const q = nameKey(searchQuery);
+    const found = [];
+    Object.keys(months).forEach(ym => (months[ym].items || []).forEach(it => {
+      if (nameKey(it.name).includes(q) || nameKey(it.category).includes(q)) found.push({ it, ym });
+    }));
+    if (!found.length) {
+      return `<div class="empty">'${escapeHtml(searchQuery.trim())}'이(가) 들어간 항목이 없습니다.</div>`;
+    }
+    found.sort((a, b) => b.ym.localeCompare(a.ym) || (b.it.date || '').localeCompare(a.it.date || ''));
+    let html = `<div class="list-section">모든 달에서 ${found.length}건 · 합계 ${signedWon(sumVal(found.map(f => f.it)))}</div>`;
+    let lastYm = null;
+    found.forEach(({ it, ym }) => {
+      if (ym !== lastYm) {
+        const inMonth = found.filter(f => f.ym === ym).map(f => f.it);
+        html += `<div class="day-head"><span>${ym.slice(0, 4)}년 ${monthName(ym)}</span><span>${signedWon(sumVal(inMonth))}</span></div>`;
+        lastYm = ym;
+      }
+      html += row(it, `jumpToItem('${it.id}')`);
+    });
+    return html;
+  }
+
+  // ── 달력 ── 날짜 칸에 그날 합계, 남은 항목이 있으면 •, 모두 끝났으면 ✓. 날짜를 누르면 그날 항목
+  function calendarHtml(list, row) {
+    const [y, m] = currentMonth.split('-').map(Number);
+    const first = new Date(y, m - 1, 1).getDay();
+    const days = daysInMonth(currentMonth);
+    const byDay = {};
+    list.forEach(it => {
+      const d = parseInt((it.date || '').slice(8), 10);
+      if (d) (byDay[d] = byDay[d] || []).push(it);
+    });
+    const today = currentMonth === todayMonth() ? new Date().getDate() : 0;
+
+    let cells = WEEKDAYS.split('').map((w, i) =>
+      `<div class="cal-week ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`).join('');
+    for (let i = 0; i < first; i++) cells += '<div></div>';
+    for (let d = 1; d <= days; d++) {
+      const its = byDay[d] || [];
+      const total = sumVal(its);
+      const left = its.some(it => !it.checked);
+      const wd = (first + d - 1) % 7;
+      const mark = !its.length ? '' : left ? '<span class="cal-mark due">•</span>' : '<span class="cal-mark done">✓</span>';
+      const cls = ['cal-day', d === selectedDay ? 'sel' : '', d === today ? 'today' : '', wd === 0 ? 'sun' : wd === 6 ? 'sat' : ''].join(' ');
+      const title = its.length ? `${m}월 ${d}일 ${its.length}건 ${signedWon(total)}${left ? ' · 남은 항목 있음' : ' · 모두 완료'}` : `${m}월 ${d}일`;
+      cells += `<button class="${cls}" onclick="selectDay(${d})" title="${title}">
+          <span class="cal-num">${d}${mark}</span>
+          <span class="cal-amt">${its.length ? shortWon(total) : ''}</span>
+        </button>`;
+    }
+
+    let html = `<div class="cal">${cells}</div>`;
+    if (selectedDay && selectedDay <= days) {
+      const its = byDay[selectedDay] || [];
+      const wd = (first + selectedDay - 1) % 7;
+      html += `<div class="day-head"><span>${m}월 ${selectedDay}일 (${WEEKDAYS[wd]})</span><span>${its.length ? signedWon(sumVal(its)) : ''}</span></div>`;
+      html += its.length ? its.map(it => row(it)).join('')
+        : `<div class="empty" style="padding: 18px 10px;">이 날 항목이 없습니다.<br>'＋ 항목 추가'를 누르면 이 날짜로 들어갑니다.</div>`;
+    } else {
+      html += `<div class="empty" style="padding: 18px 10px;">날짜를 누르면 그날 항목이 보입니다.</div>`;
+    }
+    const copy = copyButtonHtml();
+    if (copy) html += `<div class="empty" style="padding: 0 0 10px;">${copy}</div>`;
+    return html;
+  }
+
+  // ── 통계 ── 항목 기준(쓴 날짜가 속한 달): 분류별 합계, 지난달 비교, 최근 6개월
+  function itemsOf(ym) {
+    const mo = monthObj(ym);
+    return (mo && mo.items) || [];
+  }
+
+  function openStats() {
+    renderStats();
+    openSheet('statsSheet');
+  }
+
+  function renderStats() {
+    const M = currentMonth, P = prevYm(M);
+    const own = itemsOf(M), prev = itemsOf(P);
+    const total = sumVal(own), prevTotal = sumVal(prev);
+    const m = monthName(M), pm = monthName(P);
+    $('statsTitle').innerText = `📊 ${m} 통계`;
+
+    const byCat = list => list.reduce((acc, it) => {
+      const k = it.category || '기타';
+      acc[k] = (acc[k] || 0) + val(it);
+      return acc;
+    }, {});
+    const cur = byCat(own), before = byCat(prev);
+    const cats = Object.entries(cur).sort((a, b) => b[1] - a[1]);
+    const maxCat = Math.max(1, ...cats.map(c => c[1]));
+    // 늘었음(▲, 빨강) / 줄었음(▼, 초록): 쓴 돈이라 늘어난 쪽이 나쁜 쪽이다
+    const delta = (now, then) => {
+      const d = now - then;
+      if (!d) return '<span class="delta">– 같음</span>';
+      return `<span class="delta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${won(Math.abs(d))}</span>`;
+    };
+
+    let html = `
+      <div class="stat-tile">
+        <div class="lbl">${m}에 쓴 돈 (항목 합계)</div>
+        <div class="big">${signedWon(total)}</div>
+        <div class="sub">${prev.length
+          ? `${delta(total, prevTotal)} · ${pm} ${signedWon(prevTotal)}보다 ${total > prevTotal ? '더 씀' : total < prevTotal ? '덜 씀' : '같음'}`
+          : `${pm} 기록이 없어 비교할 수 없습니다`}</div>
+      </div>
+      <div class="split-line">
+        <span>고정 <b>${signedWon(sumVal(own.filter(it => it.type === 'fixed')))}</b></span>
+        <span>변동 <b>${signedWon(sumVal(own.filter(it => it.type === 'variable')))}</b></span>
+      </div>`;
+
+    html += `<div class="stat-h">분류별${prev.length ? `<small>아래 줄은 ${pm}과 비교</small>` : ''}</div>`;
+    html += cats.length ? cats.map(([cat, v]) => {
+      const share = total > 0 ? v / total * 100 : 0;
+      const pct = share > 0 && share < 1 ? '1% 미만' : `${Math.round(share)}%`;
+      const w = v > 0 ? Math.max(1, v / maxCat * 100) : 0;
+      const pv = before[cat] || 0;
+      return `
+        <div class="bar-row" title="${escapeHtml(cat)} ${signedWon(v)} (${pct})${prev.length ? ` · ${pm} ${signedWon(pv)}` : ''}">
+          <div class="bar-lbl">${escapeHtml(cat)}</div>
+          <div class="bar-track">${w ? `<div class="bar" style="width: ${w}%"></div>` : ''}</div>
+          <div class="bar-val">${signedWon(v)}<small>${pct}</small></div>
+          ${prev.length ? `<div class="bar-sub">${pm} ${signedWon(pv)} · ${delta(v, pv)}</div>` : ''}
+        </div>`;
+    }).join('') : `<div class="empty" style="padding: 14px;">이 달 항목이 없습니다.</div>`;
+    const gone = Object.keys(before).filter(k => !(k in cur));
+    if (gone.length && own.length) {
+      html += `<div class="bar-sub" style="margin: 4px 2px 0;">${pm}에만 있던 분류: ${gone.map(k => `${escapeHtml(k)} ${signedWon(before[k])}`).join(', ')}</div>`;
+    }
+
+    // 최근 6개월: 이번 달만 파랑, 나머지는 회색
+    const recent = [];
+    for (let k = M, i = 0; i < 6; i++, k = prevYm(k)) recent.unshift(k);
+    const totals = recent.map(k => ({ ym: k, total: sumVal(itemsOf(k)), has: itemsOf(k).length > 0 }));
+    const maxMonth = Math.max(1, ...totals.map(t => t.total));
+    html += `<div class="stat-h">최근 6개월<small>${m}만 파란색</small></div>`;
+    html += totals.map(t => `
+      <div class="bar-row" title="${t.ym.slice(0, 4)}년 ${monthName(t.ym)} ${t.has ? signedWon(t.total) : '기록 없음'}">
+        <div class="bar-lbl">${t.ym.slice(2, 4)}년 ${monthName(t.ym)}</div>
+        <div class="bar-track">${t.has && t.total > 0
+          ? `<div class="bar ${t.ym === M ? '' : 'muted'}" style="width: ${Math.max(1, t.total / maxMonth * 100)}%"></div>` : ''}</div>
+        <div class="bar-val">${t.has ? signedWon(t.total) : '<small>기록 없음</small>'}</div>
+      </div>`).join('');
+
+    $('statsBody').innerHTML = html;
+  }
+
+  // ── 수입 ──
+  // 수입을 여러 건 적고, 실제로 들어왔는지 체크한다. 이월 금액도 여기서 직접 고칠 수 있다
+  function openIncomeSheet() {
+    editingIncomeId = null;
+    $('incName').value = '';
+    $('incAmt').value = '';
+    renderIncomeSheet();
+    openSheet('incomeSheet');
+  }
+
+  function renderIncomeSheet() {
+    const m = monthName(currentMonth);
+    $('incomeTitle').innerText = `${m} 수입`;
+    $('incomeList').innerHTML = incomes.length ? incomes.map(x => `
+      <div class="item ${x.received ? 'checked' : ''}" onclick="toggleIncome('${x.id}')">
+        <div class="chk"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+        <div class="info">
+          <div class="name">${escapeHtml(x.name)}</div>
+          <div class="meta">${x.received ? '들어옴' : '들어올 예정 · 들어오면 체크'}</div>
+        </div>
+        <div class="amount income-amt">${won(x.amount)}</div>
+        <button class="del" onclick="editIncome('${x.id}', event)" aria-label="수정">✎</button>
+      </div>`).join('')
+      : `<div class="empty" style="padding: 16px 10px;">아직 수입이 없습니다. 아래에서 추가하세요.</div>`;
+
+    const editing = editingIncomeId && incomes.find(x => x.id === editingIncomeId);
+    $('incSubmit').innerText = editing ? '저장' : '＋ 수입 추가';
+    $('incDelete').hidden = !editing;
+
+    // 이월: 자동으로 계산한 값과 직접 입력한 값
+    const auto = autoCarry(currentMonth);
+    const manual = typeof curMonth.carry === 'number';
+    $('carryHelp').innerText = manual
+      ? `직접 입력한 금액을 쓰는 중입니다. (자동으로 계산하면 ${plusWon(auto)})`
+      : `자동: ${monthName(prevYm(currentMonth))}에 남은 돈 ${plusWon(auto)}` +
+        (auto ? '' : `\n${monthName(prevYm(currentMonth))}에 수입 기록이 없으면 0으로 봅니다.`);
+    $('carryInput').value = manual ? Math.max(0, curMonth.carry).toLocaleString('ko-KR') : '';
+    $('carryAutoBtn').hidden = !manual;
+  }
+
+  function toggleIncome(id) {
+    const x = incomes.find(i => i.id === id);
+    if (!x) return;
+    rememberForUndo();
+    x.received = !x.received;
+    saveItems();
+    renderIncomeSheet();
+    render();
+    offerUndo(`'${x.name}' ${x.received ? '들어옴' : '체크 해제'}`);
+  }
+
+  function editIncome(id, e) {
+    e.stopPropagation();
+    const x = incomes.find(i => i.id === id);
+    if (!x) return;
+    editingIncomeId = id;
+    $('incName').value = x.name;
+    $('incAmt').value = x.amount.toLocaleString('ko-KR');
+    renderIncomeSheet();
+    $('incName').focus();
+  }
+
+  function saveIncome() {
+    const name = $('incName').value.trim() || '수입';
+    const amount = parseInt(onlyDigits($('incAmt').value), 10);
+    if (!amount) { $('incAmt').focus(); return; }
+    rememberForUndo();
+    const editing = editingIncomeId && incomes.find(x => x.id === editingIncomeId);
+    if (editing) {
+      editing.name = name;
+      editing.amount = amount;
+    } else {
+      incomes.push({ id: `inc-${Date.now()}`, name, amount, received: false });
+    }
+    editingIncomeId = null;
+    $('incName').value = '';
+    $('incAmt').value = '';
+    saveItems();
+    renderIncomeSheet();
+    render();
+    offerUndo(`'${name}' ${editing ? '수정함' : '추가함'}`);
+  }
+
+  function deleteIncome() {
+    const x = editingIncomeId && incomes.find(i => i.id === editingIncomeId);
+    if (!x || !confirm(`'${x.name}' 수입을 삭제할까요?`)) return;
+    rememberForUndo();
+    incomes = incomes.filter(i => i.id !== x.id);
+    editingIncomeId = null;
+    $('incName').value = '';
+    $('incAmt').value = '';
+    saveItems();
+    renderIncomeSheet();
+    render();
+    offerUndo(`'${x.name}' 삭제함`);
+  }
+
+  // 이월 칸: 숫자를 쓰면 그 금액을 쓰고, 비우면 자동 계산으로 돌아간다
+  function saveCarryInput() {
+    const raw = onlyDigits($('carryInput').value);
+    rememberForUndo();
+    if (raw) curMonth.carry = parseInt(raw, 10);
+    else delete curMonth.carry;
+    saveItems();
+    renderIncomeSheet();
+    render();
+  }
+  function clearCarry() {
+    $('carryInput').value = '';
+    saveCarryInput();
+  }
+
+  // ── 요약 접기 ──
+  function applySummaryCollapsed(collapsed) {
+    $('summary').classList.toggle('collapsed', collapsed);
+  }
+  function toggleSummary() {
+    const collapsed = !$('summary').classList.contains('collapsed');
+    applySummaryCollapsed(collapsed);
+    safeSet(SUMMARY_KEY, collapsed ? '1' : '');
+  }
+
+  // ── 보기 전환·검색 ──
+  function toggleView() {
+    viewMode = viewMode === 'calendar' ? 'list' : 'calendar';
+    safeSet(VIEW_KEY, viewMode);
+    render();
+  }
+  function selectDay(d) {
+    selectedDay = selectedDay === d ? null : d;
+    render();
+  }
+  function toggleSearch() {
+    const row = $('searchRow');
+    if (row.hidden) {
+      row.hidden = false;
+      render();
+      $('searchInput').focus();
+    } else {
+      closeSearch();
+    }
+  }
+  function closeSearch() {
+    $('searchRow').hidden = true;
+    $('searchInput').value = '';
+    searchQuery = '';
+    render();
+  }
+  // 검색 결과를 누르면 그 항목이 있는 달로 가서 보여준다
+  function jumpToItem(id) {
+    let ym = null;
+    for (const [k, mo] of Object.entries(months)) {
+      if ((mo.items || []).some(it => it.id === id)) { ym = k; break; }
+    }
+    if (!ym) return;
+    const it = months[ym].items.find(x => x.id === id);
+    $('searchRow').hidden = true;
+    $('searchInput').value = '';
+    searchQuery = '';
+    currentFilter = 'all';
+    if (currentTab !== 'all' && !(currentTab === it.type) && !(currentTab === 'card' && it.card)) currentTab = 'all';
+    selectMonth(ym);
+    if (viewMode === 'calendar') {
+      selectedDay = parseInt((it.date || '').slice(8), 10) || null;
+      render();
+    }
+    const el = document.querySelector(`#list [data-id="${id}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1600);
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+  }
+
+  // ── 뒤로 가기 막기 ──
+  // 다른 앱(내 파일 등)에서 연 탭은 뒤로 갈 기록이 없으면 Chrome이 뒤로 가기에 탭을 닫아 버린다.
+  // 기록을 쌓아 두면 뒤로 가기가 이 페이지 안에서 처리된다(popstate).
+  //   기록: [처음 연 페이지] ← [guard] ← [sheet: 입력창·메뉴가 열려 있을 때만]
+  // Chrome 규칙(history manipulation intervention):
+  //   - 사용자 터치 없이 쌓은 기록은 뒤로 가기에서 건너뛴다 → 터치(click)할 때 쌓는다
+  //   - 뒤로 가기 직후 새 터치 없이 쌓은 기록도 건너뛴다 → 뒤로 가기를 처리하면서 다시 쌓지 않는다
+  let poppingSheet = false;  // closeSheets() 가 직접 history.back() 한 경우
+  let toastTimer = null;
+
+  function isState(name) {
+    return !!(history.state && history.state.budget === name);
+  }
+
+  function armBackGuard() {
+    if (history.state && history.state.budget) return;  // 이미 guard 나 sheet 위에 있다
+    history.pushState({ budget: 'guard' }, '');
+  }
+
+  // 아래쪽 안내. action 을 주면 버튼(되돌리기 등)이 붙고 조금 더 오래 보인다
+  function showToast(msg, action) {
+    const t = $('toast');
+    t.innerHTML = '';
+    const text = document.createElement('span');
+    text.textContent = msg;
+    t.appendChild(text);
+    if (action) {
+      const b = document.createElement('button');
+      b.className = 'toast-btn';
+      b.textContent = action.label;
+      b.onclick = e => {
+        e.stopPropagation();
+        hideToast();
+        action.run();
+      };
+      t.appendChild(b);
+    }
+    t.classList.toggle('actionable', !!action);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, action ? 5000 : 2000);
+  }
+  function hideToast() {
+    $('toast').classList.remove('show', 'actionable');
+  }
+
+  // ── 되돌리기 ──
+  // 바꾸기 직전의 전체 데이터를 한 벌 저장해 두었다가, 안내의 '되돌리기'를 누르면 그대로 되돌린다
+  let undoSnapshot = null;
+  function rememberForUndo() {
+    undoSnapshot = JSON.stringify(months);
+  }
+  function offerUndo(msg) {
+    showToast(msg, { label: '되돌리기', run: undoLast });
+  }
+  function undoLast() {
+    if (!undoSnapshot) return;
+    months = JSON.parse(undoSnapshot);
+    undoSnapshot = null;
+    safeSet(MONTHS_KEY, JSON.stringify(months));
+    selectMonth(currentMonth);  // 보고 있는 달 데이터를 다시 읽는다
+    if ($('incomeSheet').classList.contains('open')) renderIncomeSheet();
+    showToast('되돌렸습니다');
+  }
+
+  // click 은 터치가 끝난 뒤(사용자 활성화가 생긴 뒤)에 오므로, 여기서 쌓은 기록은 건너뛰어지지 않는다
+  ['click', 'keydown'].forEach(type => document.addEventListener(type, e => {
+    if (e.isTrusted) armBackGuard();
+  }, true));
+
+  window.addEventListener('popstate', () => {
+    if (poppingSheet) {           // closeSheets() 가 되돌린 것
+      poppingSheet = false;
+      return;
+    }
+    if (isState('guard')) {       // 창이 열린 채 뒤로 가기 → 창만 닫는다
+      hideSheets();
+      return;
+    }
+    if (isState('sheet')) {       // 앞으로 가기로 창 기록에 들어온 경우 → 되돌린다
+      poppingSheet = true;
+      history.back();
+      return;
+    }
+    // 처음 연 페이지까지 돌아왔다. 더 뒤로 갈 기록이 없으니 한 번 더 누르면 닫힌다.
+    // 화면을 다시 누르면 armBackGuard() 가 기록을 새로 쌓는다
+    hideSheets();
+    showToast('뒤로 가기를 한 번 더 누르면 닫힙니다');
+  });
+
+  window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>

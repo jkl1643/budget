@@ -559,6 +559,18 @@
 
     /* 환불 */
     .s-chip.refund-chip.active { border-color: var(--green); color: var(--green); background: rgba(16, 185, 129, 0.15); }
+    /* 누가 샀는지 */
+    .who-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .who-lbl { font-size: 14px; font-weight: 800; color: var(--sub); flex-shrink: 0; }
+    .who-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .who-badge {
+      background: rgba(129, 140, 248, 0.16);
+      color: var(--indigo);
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-weight: 800;
+    }
     .refund-badge {
       background: rgba(16, 185, 129, 0.14);
       color: var(--green);
@@ -849,6 +861,10 @@
     <button class="cash" id="payCash" onclick="setPayCard(false)">💵 현금·체크카드</button>
     <button class="credit" id="payCard" onclick="setPayCard(true)">💳 신용카드</button>
   </div>
+  <div class="who-row">
+    <span class="who-lbl">누가</span>
+    <div class="who-chips" id="whoChips"></div>
+  </div>
   <div class="recent-wrap" id="recentWrap">
     <div class="recent-lbl">최근 항목</div>
     <div class="recent-row" id="recentChips"></div>
@@ -879,6 +895,7 @@
   <button class="menu-btn" onclick="toggleTabChecks()">✅ 현재 탭 전체 체크 / 해제</button>
   <button class="menu-btn" onclick="resetAllChecks()">🔄 모든 체크 초기화</button>
   <button class="menu-btn" onclick="menuCopyFromPrevious()">📋 이전 달 수입·고정 지출 가져오기</button>
+  <button class="menu-btn" onclick="editMembers()">👤 구매자 이름 바꾸기</button>
   <button class="menu-btn" onclick="exportBackup()">💾 백업 내보내기 (모든 달)</button>
   <button class="menu-btn" onclick="$('importFile').click()">📂 백업 불러오기</button>
   <input type="file" id="importFile" accept=".json,application/json" hidden>
@@ -921,6 +938,8 @@
   const PAY_KEY = 'split_mobile_budget_paymethod_v1';  // 새 항목의 결제수단 기본값(마지막에 고른 것)
   const VIEW_KEY = 'split_mobile_budget_view_v1';      // 목록 / 달력
   const SUMMARY_KEY = 'split_mobile_budget_sumfold_v1'; // 요약을 접어 두었는지
+  const MEMBERS_KEY = 'split_mobile_budget_members_v1'; // 구매자 목록 [{ id, name }]
+  const WHO_KEY = 'split_mobile_budget_who_v1';         // 새 항목의 구매자 기본값(마지막에 고른 사람)
 
   // 분류는 가계부.xlsx 의 대분류/카테고리에 맞춤
   const categoriesFixed = ['보험료', '통신/반려견', '주거/금융/구독', '생활비', '기타'];
@@ -936,6 +955,8 @@
   let searchQuery = '';
   let inputRefund = false;     // 입력창에서 '환불'을 골랐는지
   let editingIncomeId = null;  // 수정 중인 수입 id
+  let members = [];            // 구매자 [{ id, name }]
+  let inputWho = null;         // 입력창에서 고른 구매자 id
   let currentTab = 'all';      // 'all' | 'fixed' | 'variable'
   let currentFilter = 'all';   // 'all' | 'unchecked' | 'checked'
   let inputType = 'variable';
@@ -962,6 +983,7 @@
     }
 
     checkStorage();
+    loadMembers();
     loadMonths();
 
     const savedTab = safeGet(TAB_KEY);
@@ -1205,7 +1227,7 @@
   // ── 백업 ──
   // 모든 달의 데이터를 .json 파일 하나로 내려받는다
   function exportBackup() {
-    const backup = { app: 'check-budget', version: 1, exportedAt: new Date().toISOString(), months };
+    const backup = { app: 'check-budget', version: 2, exportedAt: new Date().toISOString(), months, members };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const t = new Date();
     const stamp = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
@@ -1224,9 +1246,10 @@
     closeSheets();
     const reader = new FileReader();
     reader.onload = () => {
-      let data;
+      let data, raw;
       try {
-        data = parseBackup(JSON.parse(reader.result));
+        raw = JSON.parse(reader.result);
+        data = parseBackup(raw);
       } catch (e) {
         alert('백업 파일을 읽을 수 없습니다.\n가계부에서 내보낸 .json 파일인지 확인해 주세요.');
         return;
@@ -1237,6 +1260,15 @@
       if (!confirm(`백업을 불러올까요?\n\n기간: ${range} (${keys.length}개월)\n항목: ${count}개\n\n⚠️ 지금 이 기기에 있는 가계부 내용은 모두 백업 내용으로 바뀝니다.`)) return;
       months = data;
       safeSet(MONTHS_KEY, JSON.stringify(months));
+      // 구매자 이름도 백업에 있으면 함께 가져온다
+      const mem = Array.isArray(raw.members)
+        ? raw.members.filter(m => m && typeof m.id === 'string' && typeof m.name === 'string' && m.name.trim())
+          .map(m => ({ id: m.id, name: m.name.trim() }))
+        : [];
+      if (mem.length) {
+        members = mem;
+        saveMembers();
+      }
       selectMonth(currentMonth);
       alert('불러오기를 마쳤습니다.');
     };
@@ -1263,7 +1295,8 @@
           date: /^\d{4}-\d{2}-\d{2}$/.test(it.date || '') ? it.date : `${ym}-01`,
           ...(it.card ? { card: true } : {}),
           ...(it.card && /^\d{4}-\d{2}$/.test(it.paidIn || '') ? { paidIn: it.paidIn } : {}),
-          ...(it.refund ? { refund: true } : {})
+          ...(it.refund ? { refund: true } : {}),
+          ...(typeof it.who === 'string' && /^[\w-]+$/.test(it.who) ? { who: it.who } : {})
         }));
       // 수입: 새 형식(incomes 목록) 또는 예전 형식(income 숫자)
       const incs = Array.isArray(mo.incomes)
@@ -1466,6 +1499,7 @@
     if (currentTab === 'fixed' || currentTab === 'variable') setInputType(currentTab);
     setPayCard(currentTab === 'card' || safeGet(PAY_KEY) === 'card', false);
     setRefund(false);
+    setWho(safeGet(WHO_KEY), false);
     // 날짜는 보고 있는 달 안에서만 고르게 하고, 이번 달이면 오늘을 기본값으로
     const dateEl = $('dateInput');
     const today = new Date();
@@ -1579,6 +1613,42 @@
     updateRepeatHint();
   }
 
+  // ── 구매자(누가 샀는지) ──
+  // 이름을 바꿔도 항목과 연결이 유지되게 항목에는 id 를 저장한다
+  function loadMembers() {
+    try { members = JSON.parse(safeGet(MEMBERS_KEY) || 'null'); } catch (e) { members = null; }
+    if (!Array.isArray(members) || !members.length) {
+      members = [{ id: 'm1', name: '나' }, { id: 'm2', name: '배우자' }];
+    }
+  }
+  function saveMembers() { safeSet(MEMBERS_KEY, JSON.stringify(members)); }
+  function memberName(id) {
+    const m = id && members.find(x => x.id === id);
+    return m ? m.name : '';
+  }
+
+  // 고른 사람을 다시 누르면 선택이 풀린다(고르지 않아도 된다)
+  function setWho(id, remember = true) {
+    inputWho = id && members.some(m => m.id === id) ? id : null;
+    if (remember && !editingId) safeSet(WHO_KEY, inputWho || '');
+    $('whoChips').innerHTML = members.map(m => `
+      <button class="s-chip ${m.id === inputWho ? 'active' : ''}" onclick="setWho(${m.id === inputWho ? 'null' : `'${m.id}'`})">${escapeHtml(m.name)}</button>`).join('');
+  }
+
+  // 이름은 쉼표로 구분해 한 번에 고친다. 순서대로 기존 사람과 이어져서, 이미 적은 항목의 이름도 같이 바뀐다
+  function editMembers() {
+    closeSheets();
+    const input = prompt('구매자 이름을 쉼표로 구분해 적어 주세요.\n(예: 나, 배우자)', members.map(m => m.name).join(', '));
+    if (input === null) return;
+    const names = input.split(',').map(s => s.trim()).filter(Boolean).slice(0, 6);
+    if (!names.length) return;
+    const base = Date.now();
+    members = names.map((name, i) => ({ id: members[i] ? members[i].id : `m${base}${i}`, name }));
+    saveMembers();
+    render();
+    showToast(`구매자: ${names.join(', ')}`);
+  }
+
   function updateSubmitLabel() {
     $('submitBtn').innerText = editingId ? '저장'
       : inputRefund ? '↩️ 환불 추가'
@@ -1614,6 +1684,8 @@
         }
         if (inputRefund) it.refund = true;
         else delete it.refund;
+        if (inputWho) it.who = inputWho;
+        else delete it.who;
         saveItems();
       }
     } else {
@@ -1628,6 +1700,7 @@
       };
       if (inputCard) it.card = true;
       if (inputRefund) it.refund = true;
+      if (inputWho) it.who = inputWho;
       items.unshift(it);
       saveItems();
     }
@@ -1681,6 +1754,7 @@
     selectCategory(it.category);
     setPayCard(!!it.card, false);
     setRefund(!!it.refund);
+    setWho(it.who || null, false);
     $('nameInput').value = it.name;
     $('amtInput').value = it.amount.toLocaleString('ko-KR');
     const dateEl = $('dateInput');
@@ -1993,6 +2067,7 @@
           <div class="meta">
             <span class="dot ${it.type}"></span>
             <span>${it.type === 'fixed' ? '고정' : '변동'} · ${escapeHtml(it.category || '')}${dateLabel(it.date)}</span>
+            ${memberName(it.who) ? `<span class="who-badge">👤 ${escapeHtml(memberName(it.who))}</span>` : ''}
             ${it.refund ? `<span class="refund-badge">↩️ 환불${it.checked ? ' 받음' : ''}</span>` : ''}
             ${cardBadge(it)}
             ${repeatBadge(it)}
@@ -2009,7 +2084,9 @@
     const q = nameKey(searchQuery);
     const found = [];
     Object.keys(months).forEach(ym => (months[ym].items || []).forEach(it => {
-      if (nameKey(it.name).includes(q) || nameKey(it.category).includes(q)) found.push({ it, ym });
+      if (nameKey(it.name).includes(q) || nameKey(it.category).includes(q) || nameKey(memberName(it.who)).includes(q)) {
+        found.push({ it, ym });
+      }
     }));
     if (!found.length) {
       return `<div class="empty">'${escapeHtml(searchQuery.trim())}'이(가) 들어간 항목이 없습니다.</div>`;
@@ -2135,6 +2212,29 @@
     const gone = Object.keys(before).filter(k => !(k in cur));
     if (gone.length && own.length) {
       html += `<div class="bar-sub" style="margin: 4px 2px 0;">${pm}에만 있던 분류: ${gone.map(k => `${escapeHtml(k)} ${signedWon(before[k])}`).join(', ')}</div>`;
+    }
+
+    // 사람별: 구매자를 적은 항목이 있을 때만
+    if (own.some(it => memberName(it.who))) {
+      const byWho = {};
+      own.forEach(it => {
+        const k = memberName(it.who) ? it.who : '';
+        byWho[k] = (byWho[k] || 0) + val(it);
+      });
+      const rows = Object.entries(byWho).sort((a, b) => b[1] - a[1]);
+      const maxWho = Math.max(1, ...rows.map(r => r[1]));
+      html += `<div class="stat-h">사람별</div>` + rows.map(([k, v]) => {
+        const label = k ? memberName(k) : '안 정함';
+        const share = total > 0 ? v / total * 100 : 0;
+        const pct = share > 0 && share < 1 ? '1% 미만' : `${Math.round(share)}%`;
+        const w = v > 0 ? Math.max(1, v / maxWho * 100) : 0;
+        return `
+          <div class="bar-row" title="${escapeHtml(label)} ${signedWon(v)} (${pct})">
+            <div class="bar-lbl">${escapeHtml(label)}</div>
+            <div class="bar-track">${w ? `<div class="bar" style="width: ${w}%"></div>` : ''}</div>
+            <div class="bar-val">${signedWon(v)}<small>${pct}</small></div>
+          </div>`;
+      }).join('');
     }
 
     // 최근 6개월: 이번 달만 파랑, 나머지는 회색
